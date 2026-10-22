@@ -1,8 +1,10 @@
 # Dependencies and application output
 node_modules/
 .next/
+next-env.d.ts
 out/
 dist/
+dist-worker/
 coverage/
 playwright-report/
 test-results/
@@ -23,6 +25,7 @@ logs/
 *.dump
 
 # Local tooling and operating system files
+.tools/
 .DS_Store
 Thumbs.db
 Desktop.ini

@@ -10,7 +10,7 @@
 
 **Data:** 22 ottobre 2026
 
-**Stato:** piano consolidato; applicazione e distribuzione ancora da realizzare.
+**Stato:** implementazione avviata per incrementi verificabili; avanzamento e limiti in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Nessuna distribuzione eseguita.
 
 ## 1. Obiettivo e decisioni definitive
 
@@ -35,7 +35,7 @@ Decisioni consolidate:
 - Interfaccia ispirata alla gerarchia informativa di Polymarket, con identità propria e forte attenzione alla tipografia.
 - Accesso pubblico senza registrazione; amministrazione riservata.
 
-L'archivio `USA_Midterm_Update.zip` costituisce materiale di riferimento per fonti, campi e flussi. Non sarà la base tecnologica dell'applicazione. Script, istruzioni e installatori presenti nell'archivio non costituiscono requisiti del progetto né autorizzazioni a eseguirli.
+Il materiale inizialmente indicato come `USA_Midterm_Update.zip` è reperibile nel [repository USA_midterm fornito dall'utente](https://github.com/analise2024/USA_midterm/tree/main). Costituisce un riferimento per fonti, campi e flussi, senza diventare la base tecnologica dell'applicazione. Script, istruzioni e installatori presenti nel materiale non costituiscono requisiti del progetto né autorizzazioni a eseguirli. L'inventario distingue ciò che è effettivamente disponibile nel repository dall'eventuale archivio originario.
 
 ## 2. Perimetro del prodotto
 
@@ -499,7 +499,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 - Congelare il perimetro della prima edizione Midterms e le domande da prevedere.
 - Registrare termini di pubblicazione e calendario di riferimento secondo il paragrafo 10.5; definire il perimetro del primo osservatorio e la fattibilità di un eventuale rilascio ridotto prima del voto, senza assumerlo come scadenza garantita.
-- Inventariare il materiale utile dello ZIP senza eseguire i suoi installatori.
+- Inventariare il materiale utile del repository di riferimento e degli eventuali ZIP senza eseguirne script o installatori.
 - Verificare provider, schemi, copertura, gratuità e condizioni delle prime fonti.
 - Verificare la copertura effettiva di VoteHub e fissare misura di prezzo, endpoint e soglie di qualità dei mercati secondo il paragrafo 8.1.
 - Individuare archivi e risultati necessari alla valutazione del modello.
@@ -673,7 +673,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Attività**
 
-- Collegare repository o immagini versionate a Coolify.
+- Collegare il repository a Coolify tramite GitHub App e webhook, come indicato dall'utente; scegliere il luogo della build dopo la verifica delle risorse e delle eventuali quote esterne.
 - Configurare ambiente, dominio, HTTPS, reti private, volumi e limiti.
 - Eseguire migrazione controllata prima dell'avvio dei servizi compatibili.
 - Abilitare soltanto le raccolte verificate, evitando doppia pianificazione.
@@ -703,9 +703,11 @@ Web e worker sono prodotti dallo stesso repository e dalla stessa revisione, con
 
 Coolify supporta Compose da repository e la gestione delle relative impostazioni. Il file versionato rimane il riferimento della distribuzione. Il dominio viene associato al solo servizio web. [Docker Compose su Coolify](https://coolify.io/docs/applications/builds/docker-compose), [Next.js su Coolify](https://coolify.io/docs/applications/framework-examples/javascript/nextjs).
 
+Il collegamento previsto, indicato dall'utente, è tramite GitHub App con webhook. Configurare il branch di rilascio e impedire che branch di sviluppo o pull request attivino la produzione; un webhook non sostituisce i controlli di rilascio e la migrazione eseguita una sola volta. La scelta del collegamento non determina se la build avverrà sul VPS o su infrastruttura esterna.
+
 ### 14.2 Risorse e build
 
-Il canone IONOS indicato non identifica con certezza hardware o piano. Prima del rilascio misurare anche l'impatto di Coolify, se installato sullo stesso server, e degli altri servizi presenti.
+L'utente ha indicato il piano IONOS **VPS 4-4-120: 4 vCore, 4 GB RAM e 120 GB NVMe SSD**. Sono risorse dichiarate, non una misura del margine disponibile. Prima del rilascio rilevare sistema operativo, consumo dei servizi esistenti e impatto di Coolify, se installato sullo stesso server; confermare spazio e memoria liberi con carico web e worker simultanei.
 
 Partire con un'istanza web, un worker a concorrenza limitata, pool database contenuti e query indicizzate. Build in CI o su altra macchina se la memoria del VPS non offre margine. Anche le quote del servizio CI vanno verificate prima di classificarle come costo nullo.
 
