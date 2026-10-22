@@ -145,11 +145,28 @@ export function isComparableMarket(item: EvaluationCase): boolean {
   const observed = safeTimestamp(market.observedAt);
   const acquired = safeTimestamp(market.acquiredAt);
   const checked = safeTimestamp(market.equivalence?.checkedAt);
-  return !!(
-    asOf !== null &&
-    observed !== null &&
-    acquired !== null &&
-    checked !== null &&
+  if (
+    asOf === null ||
+    observed === null ||
+    acquired === null ||
+    checked === null
+  )
+    return false;
+  return (
+    marketIdentityMatches(item, market) &&
+    marketQuoteIsEligible(market) &&
+    checked <= asOf &&
+    observed <= acquired &&
+    acquired <= asOf &&
+    asOf - observed <= 30 * 60_000
+  );
+}
+
+function marketIdentityMatches(
+  item: EvaluationCase,
+  market: MarketEvaluationEvidence,
+): boolean {
+  return (
     validId(item.targetOutcomeId) &&
     validId(market.contractId) &&
     validId(market.outcomeId) &&
@@ -159,8 +176,12 @@ export function isComparableMarket(item: EvaluationCase): boolean {
     market.equivalence.targetOutcomeId === item.targetOutcomeId &&
     market.equivalence.marketContractId === market.contractId &&
     market.equivalence.marketOutcomeId === market.outcomeId &&
-    httpsReference(market.equivalence.referenceUrl) &&
-    checked <= asOf &&
+    httpsReference(market.equivalence.referenceUrl)
+  );
+}
+
+function marketQuoteIsEligible(market: MarketEvaluationEvidence): boolean {
+  return (
     market.priceType === "bid_ask_midpoint" &&
     market.timestampFormatVerified === true &&
     Number.isFinite(market.bid) &&
@@ -173,10 +194,7 @@ export function isComparableMarket(item: EvaluationCase): boolean {
     market.qualityStatus === "eligible" &&
     Number.isFinite(market.probability) &&
     market.probability >= 0 &&
-    market.probability <= 1 &&
-    observed <= acquired &&
-    acquired <= asOf &&
-    asOf - observed <= 30 * 60_000
+    market.probability <= 1
   );
 }
 
@@ -192,6 +210,146 @@ function timestamp(value: string, field: string): number {
   return parsed;
 }
 
+function recordCaseIdentity(
+  item: EvaluationCase,
+  caseIds: Set<string>,
+  splits: Map<string, EvaluationCase["split"]>,
+): void {
+  if (
+    !validId(item.caseId) ||
+    !validId(item.cycleId) ||
+    !validId(item.targetOutcomeId) ||
+    caseIds.has(item.caseId)
+  )
+    throw new Error("Missing or duplicate evaluation case");
+  if (!["development", "tuning", "test"].includes(item.split))
+    throw new Error("Unknown evaluation split");
+  if (item.outcome !== 0 && item.outcome !== 1)
+    throw new Error("Outcome must be binary");
+  if (!Array.isArray(item.inputs) || item.inputs.length === 0)
+    throw new Error("Evaluation needs historical input evidence");
+  caseIds.add(item.caseId);
+  if (splits.has(item.cycleId) && splits.get(item.cycleId) !== item.split) {
+    throw new Error("Election cycle appears in more than one split");
+  }
+  splits.set(item.cycleId, item.split);
+}
+
+function validateCaseChronology(item: EvaluationCase): {
+  asOf: number;
+  electionDate: number;
+} {
+  const asOf = timestamp(item.inputAsOf, "inputAsOf");
+  const electionDate = Date.parse(`${item.electionDate}T00:00:00Z`);
+  if (
+    !calendarDateSchema.safeParse(item.electionDate).success ||
+    !Number.isFinite(electionDate)
+  ) {
+    throw new Error("Invalid election date");
+  }
+  const cutoff = timestamp(item.forecastCutoffAt, "forecastCutoffAt");
+  if (asOf >= cutoff || cutoff > electionDate)
+    throw new Error("Prediction is outside pre-election forecast cutoff");
+  if (timestamp(item.outcomeVerifiedAt, "outcomeVerifiedAt") <= asOf) {
+    throw new Error(
+      "Verified result was available before or at prediction time",
+    );
+  }
+  if (timestamp(item.outcomeVerifiedAt, "outcomeVerifiedAt") < electionDate) {
+    throw new Error("Result verification precedes election");
+  }
+  return { asOf, electionDate };
+}
+
+function hasReviewedArchive(input: HistoricalAvailability): boolean {
+  return !!(
+    input.archive &&
+    httpsReference(input.archive.url) &&
+    validId(input.archive.version) &&
+    /^[a-f0-9]{64}$/.test(input.archive.sha256) &&
+    input.archive.availabilityReview?.status === "verified" &&
+    httpsReference(input.archive.availabilityReview.evidenceUrl) &&
+    input.archive.availabilityReview.availableAt === input.availableAt &&
+    timestamp(input.archive.availabilityReview.reviewedAt, "reviewedAt") >=
+      timestamp(
+        input.archive.availabilityReview.availableAt,
+        "reviewed availability",
+      )
+  );
+}
+
+function validateHistoricalInputs(item: EvaluationCase, asOf: number): void {
+  for (const input of item.inputs) {
+    if (
+      !input.referenceId ||
+      timestamp(input.availableAt, "availableAt") > asOf
+    ) {
+      throw new Error("Historical input was unavailable as of prediction");
+    }
+    const acquired = timestamp(input.acquiredAt, "acquiredAt");
+    if (acquired < timestamp(input.availableAt, "availableAt"))
+      throw new Error("Historical acquisition precedes availability");
+    if (
+      ![
+        "actual_acquisition",
+        "documented_historical",
+        "assumed_historical",
+      ].includes(input.evidence)
+    )
+      throw new Error("Unknown historical availability evidence");
+    if (input.evidence === "assumed_historical")
+      throw new Error("Assumed availability is not causal evaluation");
+    if (
+      input.evidence === "actual_acquisition" &&
+      (acquired > asOf || input.acquiredAt !== input.availableAt)
+    ) {
+      throw new Error("Acquisition follows prediction time");
+    }
+    if (
+      input.evidence === "documented_historical" &&
+      !hasReviewedArchive(input)
+    ) {
+      throw new Error(
+        "Historical availability needs reviewed archive provenance",
+      );
+    }
+    if (input.evidence === "actual_acquisition" && input.archive !== null)
+      throw new Error(
+        "Actual acquisition must not claim an archive reconstruction",
+      );
+  }
+}
+
+function validateCaseScores(item: EvaluationCase): void {
+  for (const probability of [item.probability, item.baselineProbability].filter(
+    (value) => value !== undefined,
+  )) {
+    if (!Number.isFinite(probability) || probability < 0 || probability > 1)
+      throw new Error("Probability must be a fraction in [0, 1]");
+  }
+  if (item.lower80 !== null || item.upper80 !== null) {
+    if (
+      item.lower80 === null ||
+      item.upper80 === null ||
+      item.observedSeats === null ||
+      !Number.isFinite(item.lower80) ||
+      !Number.isFinite(item.upper80) ||
+      item.lower80 > item.upper80
+    ) {
+      throw new Error("Invalid interval");
+    }
+  }
+  if ((item.observedSeats === null) !== (item.predictedSeats === null))
+    throw new Error("Seat pair is incomplete");
+  if (
+    item.observedSeats !== null &&
+    (!Number.isFinite(item.observedSeats) ||
+      !Number.isFinite(item.predictedSeats))
+  ) {
+    throw new Error("Seat counts must be finite");
+  }
+}
+
 /** Checks declared chronology and provenance shape, not the truth of external evidence. */
 export function assertCausalEvaluation(cases: readonly EvaluationCase[]): void {
   if (cases.length === 0) throw new Error("Evaluation needs cases");
@@ -199,125 +357,14 @@ export function assertCausalEvaluation(cases: readonly EvaluationCase[]): void {
   const caseIds = new Set<string>();
   const datesBySplit = new Map<EvaluationCase["split"], number[]>();
   for (const item of cases) {
-    if (
-      !validId(item.caseId) ||
-      !validId(item.cycleId) ||
-      !validId(item.targetOutcomeId) ||
-      caseIds.has(item.caseId)
-    )
-      throw new Error("Missing or duplicate evaluation case");
-    if (!["development", "tuning", "test"].includes(item.split))
-      throw new Error("Unknown evaluation split");
-    if (item.outcome !== 0 && item.outcome !== 1)
-      throw new Error("Outcome must be binary");
-    if (!Array.isArray(item.inputs) || item.inputs.length === 0)
-      throw new Error("Evaluation needs historical input evidence");
-    caseIds.add(item.caseId);
-    if (splits.has(item.cycleId) && splits.get(item.cycleId) !== item.split) {
-      throw new Error("Election cycle appears in more than one split");
-    }
-    splits.set(item.cycleId, item.split);
-    const asOf = timestamp(item.inputAsOf, "inputAsOf");
-    const electionDate = Date.parse(`${item.electionDate}T00:00:00Z`);
-    if (
-      !calendarDateSchema.safeParse(item.electionDate).success ||
-      !Number.isFinite(electionDate)
-    ) {
-      throw new Error("Invalid election date");
-    }
+    recordCaseIdentity(item, caseIds, splits);
+    const { asOf, electionDate } = validateCaseChronology(item);
     datesBySplit.set(item.split, [
       ...(datesBySplit.get(item.split) ?? []),
       electionDate,
     ]);
-    const cutoff = timestamp(item.forecastCutoffAt, "forecastCutoffAt");
-    if (asOf >= cutoff || cutoff > electionDate)
-      throw new Error("Prediction is outside pre-election forecast cutoff");
-    if (timestamp(item.outcomeVerifiedAt, "outcomeVerifiedAt") <= asOf) {
-      throw new Error(
-        "Verified result was available before or at prediction time",
-      );
-    }
-    if (timestamp(item.outcomeVerifiedAt, "outcomeVerifiedAt") < electionDate) {
-      throw new Error("Result verification precedes election");
-    }
-    for (const input of item.inputs) {
-      if (
-        !input.referenceId ||
-        timestamp(input.availableAt, "availableAt") > asOf
-      ) {
-        throw new Error("Historical input was unavailable as of prediction");
-      }
-      const acquired = timestamp(input.acquiredAt, "acquiredAt");
-      if (acquired < timestamp(input.availableAt, "availableAt"))
-        throw new Error("Historical acquisition precedes availability");
-      if (
-        ![
-          "actual_acquisition",
-          "documented_historical",
-          "assumed_historical",
-        ].includes(input.evidence)
-      )
-        throw new Error("Unknown historical availability evidence");
-      if (input.evidence === "assumed_historical")
-        throw new Error("Assumed availability is not causal evaluation");
-      if (
-        input.evidence === "actual_acquisition" &&
-        (acquired > asOf || input.acquiredAt !== input.availableAt)
-      ) {
-        throw new Error("Acquisition follows prediction time");
-      }
-      if (
-        input.evidence === "documented_historical" &&
-        (!input.archive ||
-          !httpsReference(input.archive.url) ||
-          !validId(input.archive.version) ||
-          !/^[a-f0-9]{64}$/.test(input.archive.sha256) ||
-          input.archive.availabilityReview?.status !== "verified" ||
-          !httpsReference(input.archive.availabilityReview.evidenceUrl) ||
-          input.archive.availabilityReview.availableAt !== input.availableAt ||
-          timestamp(input.archive.availabilityReview.reviewedAt, "reviewedAt") <
-            timestamp(
-              input.archive.availabilityReview.availableAt,
-              "reviewed availability",
-            ))
-      ) {
-        throw new Error(
-          "Historical availability needs reviewed archive provenance",
-        );
-      }
-      if (input.evidence === "actual_acquisition" && input.archive !== null)
-        throw new Error(
-          "Actual acquisition must not claim an archive reconstruction",
-        );
-    }
-    for (const probability of [
-      item.probability,
-      item.baselineProbability,
-    ].filter((value) => value !== undefined)) {
-      if (!Number.isFinite(probability) || probability < 0 || probability > 1)
-        throw new Error("Probability must be a fraction in [0, 1]");
-    }
-    if (item.lower80 !== null || item.upper80 !== null) {
-      if (
-        item.lower80 === null ||
-        item.upper80 === null ||
-        item.observedSeats === null ||
-        !Number.isFinite(item.lower80) ||
-        !Number.isFinite(item.upper80) ||
-        item.lower80 > item.upper80
-      ) {
-        throw new Error("Invalid interval");
-      }
-    }
-    if ((item.observedSeats === null) !== (item.predictedSeats === null))
-      throw new Error("Seat pair is incomplete");
-    if (
-      item.observedSeats !== null &&
-      (!Number.isFinite(item.observedSeats) ||
-        !Number.isFinite(item.predictedSeats))
-    ) {
-      throw new Error("Seat counts must be finite");
-    }
+    validateHistoricalInputs(item, asOf);
+    validateCaseScores(item);
   }
   for (const [earlier, later] of [
     ["development", "tuning"],

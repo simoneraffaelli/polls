@@ -57,10 +57,11 @@ const candidateSchema = z.object({
   negative_percentage: z.string(),
 });
 
-/** One explicit DB read of reviewed inputs. A later run transaction rechecks every reference. */
-export async function buildReviewedModelSnapshot(db: Database, raw: unknown) {
-  const input = requestSchema.parse(raw);
-  const asOf = new Date(input.inputAsOf);
+async function loadReviewedContext(
+  db: Database,
+  input: z.infer<typeof requestSchema>,
+  asOf: Date,
+) {
   const [question] = await db
     .select({
       id: forecastQuestions.id,
@@ -122,6 +123,18 @@ export async function buildReviewedModelSnapshot(db: Database, raw: unknown) {
   const raceIds = payload.races.map((race) => race.raceId);
   if (raceIds.length < 1 || raceIds.length > 500)
     throw new Error("Reviewed race count exceeds model bounds");
+  return { question, payload, raceIds };
+}
+
+/** One explicit DB read of reviewed inputs. A later run transaction rechecks every reference. */
+export async function buildReviewedModelSnapshot(db: Database, raw: unknown) {
+  const input = requestSchema.parse(raw);
+  const asOf = new Date(input.inputAsOf);
+  const { question, payload, raceIds } = await loadReviewedContext(
+    db,
+    input,
+    asOf,
+  );
   const candidateQuery = sql`
     WITH eligible_polls AS (
       SELECT DISTINCT l0.poll_id

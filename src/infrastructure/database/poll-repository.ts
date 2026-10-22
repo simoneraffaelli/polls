@@ -34,6 +34,171 @@ function publicationFields(
   } as const;
 }
 
+type PollObservation = z.infer<typeof pollObservationSchema>;
+
+function sameFingerprint(
+  poll: PollObservation,
+  stored: {
+    contentHash: string;
+    sourceRevision: string | null;
+    sourceUrl: string;
+    parserVersion: string;
+    transformVersion: string;
+  },
+) {
+  return (
+    stored.contentHash === poll.provenance.contentHash &&
+    stored.sourceRevision === poll.provenance.sourceRevision &&
+    stored.sourceUrl === poll.provenance.sourceUrl &&
+    stored.parserVersion === poll.provenance.parserVersion &&
+    stored.transformVersion === poll.provenance.transformationVersion
+  );
+}
+
+async function loadAcquisitionContext(
+  tx: DatabaseTransaction,
+  poll: PollObservation,
+  record: typeof pollRecords.$inferSelect,
+) {
+  const [receipt] = await tx
+    .select()
+    .from(pollAcquisitions)
+    .where(
+      and(
+        eq(pollAcquisitions.pollId, record.id),
+        eq(pollAcquisitions.ingestionRunId, poll.provenance.ingestionRunId),
+      ),
+    );
+  if (receipt && !sameFingerprint(poll, receipt))
+    throw new Error("Conflicting replay for poll acquisition run");
+
+  const [latest] = await tx
+    .select()
+    .from(pollRevisions)
+    .where(eq(pollRevisions.pollId, record.id))
+    .orderBy(desc(pollRevisions.revisionNo))
+    .limit(1);
+  const [latestAcquisition] = await tx
+    .select()
+    .from(pollAcquisitions)
+    .where(eq(pollAcquisitions.pollId, record.id))
+    .orderBy(desc(pollAcquisitions.acquiredAt), desc(pollAcquisitions.id))
+    .limit(1);
+  if (
+    !receipt &&
+    latestAcquisition &&
+    new Date(poll.provenance.acquiredAt).getTime() <
+      latestAcquisition.acquiredAt.getTime()
+  ) {
+    throw new Error("Stale poll acquisition cannot change latest revision");
+  }
+  if (
+    !receipt &&
+    latestAcquisition &&
+    new Date(poll.provenance.acquiredAt).getTime() ===
+      latestAcquisition.acquiredAt.getTime() &&
+    !sameFingerprint(poll, latestAcquisition)
+  ) {
+    throw new Error("Conflicting poll acquisition at the same instant");
+  }
+  return { receipt, latest };
+}
+
+async function resolvePollRevision(
+  tx: DatabaseTransaction,
+  poll: PollObservation,
+  record: typeof pollRecords.$inferSelect,
+) {
+  const observed = poll.provenance.observed;
+  if (observed.kind !== "date_period")
+    throw new Error("Poll fieldwork period required");
+  const { receipt, latest } = await loadAcquisitionContext(tx, poll, record);
+  const createRevision =
+    !receipt && (!latest || !sameFingerprint(poll, latest));
+  let revisionId: string;
+  let revisionNo: number;
+  if (!createRevision) {
+    const chosenRevisionId = receipt?.revisionId ?? latest?.id;
+    if (!chosenRevisionId) throw new Error("Poll revision could not be loaded");
+    const [chosen] = await tx
+      .select({ id: pollRevisions.id, revisionNo: pollRevisions.revisionNo })
+      .from(pollRevisions)
+      .where(eq(pollRevisions.id, chosenRevisionId));
+    if (!chosen) throw new Error("Poll revision could not be loaded");
+    revisionId = chosen.id;
+    revisionNo = chosen.revisionNo;
+  } else {
+    revisionNo = (latest?.revisionNo ?? 0) + 1;
+    const [revision] = await tx
+      .insert(pollRevisions)
+      .values({
+        pollId: record.id,
+        sourceId: poll.provenance.sourceId,
+        revisionNo,
+        supersedesRevisionId: latest?.id ?? null,
+        sourceRevision: poll.provenance.sourceRevision,
+        contentHash: poll.provenance.contentHash,
+        sourceUrl: poll.provenance.sourceUrl,
+        pollster: poll.pollster,
+        sponsors: poll.sponsors,
+        fieldworkStart: observed.startDate,
+        fieldworkEnd: observed.endDate,
+        ...publicationFields(poll.provenance.declaredPublication),
+        acquiredAt: new Date(poll.provenance.acquiredAt),
+        parserVersion: poll.provenance.parserVersion,
+        transformVersion: poll.provenance.transformationVersion,
+        ingestionRunId: poll.provenance.ingestionRunId,
+      })
+      .returning({ id: pollRevisions.id });
+    if (!revision) throw new Error("Poll revision insert returned no row");
+    revisionId = revision.id;
+    await tx.insert(pollQuestions).values(
+      poll.questions.map((question) => ({
+        revisionId,
+        externalQuestionId: question.questionId,
+        wording: question.wording,
+        kind: question.kind,
+        populationKind: question.population.kind,
+        populationDescription: question.population.description,
+        sampleGroupId: question.sampleGroupId,
+        sampleSize: question.sampleSize,
+      })),
+    );
+    await tx.insert(pollOptions).values(
+      poll.questions.flatMap((question) =>
+        question.options.map((option) => ({
+          revisionId,
+          externalQuestionId: question.questionId,
+          optionId: option.optionId,
+          label: option.label,
+          percentage: option.percentage.toString(),
+        })),
+      ),
+    );
+    await tx
+      .update(pollRevisions)
+      .set({ sealed: true })
+      .where(eq(pollRevisions.id, revisionId));
+  }
+
+  if (!receipt) {
+    await tx.insert(pollAcquisitions).values({
+      pollId: record.id,
+      sourceId: poll.provenance.sourceId,
+      ingestionRunId: poll.provenance.ingestionRunId,
+      revisionId,
+      sourceRevision: poll.provenance.sourceRevision,
+      contentHash: poll.provenance.contentHash,
+      sourceUrl: poll.provenance.sourceUrl,
+      parserVersion: poll.provenance.parserVersion,
+      transformVersion: poll.provenance.transformationVersion,
+      acquiredAt: new Date(poll.provenance.acquiredAt),
+    });
+  }
+
+  return { revisionId, revisionNo, createRevision };
+}
+
 /** Each source-run receipt is durable; a later retry cannot masquerade as a correction. */
 export async function recordPollRevision(
   db: Database,
@@ -101,141 +266,8 @@ export async function recordPollRevisionInTransaction(
       sql`SELECT id FROM poll_records WHERE id = ${record.id} FOR UPDATE`,
     );
 
-    const [receipt] = await tx
-      .select()
-      .from(pollAcquisitions)
-      .where(
-        and(
-          eq(pollAcquisitions.pollId, record.id),
-          eq(pollAcquisitions.ingestionRunId, poll.provenance.ingestionRunId),
-        ),
-      );
-    const sameFingerprint = (stored: {
-      contentHash: string;
-      sourceRevision: string | null;
-      sourceUrl: string;
-      parserVersion: string;
-      transformVersion: string;
-    }) =>
-      stored.contentHash === poll.provenance.contentHash &&
-      stored.sourceRevision === poll.provenance.sourceRevision &&
-      stored.sourceUrl === poll.provenance.sourceUrl &&
-      stored.parserVersion === poll.provenance.parserVersion &&
-      stored.transformVersion === poll.provenance.transformationVersion;
-    if (receipt && !sameFingerprint(receipt))
-      throw new Error("Conflicting replay for poll acquisition run");
-
-    const [latest] = await tx
-      .select()
-      .from(pollRevisions)
-      .where(eq(pollRevisions.pollId, record.id))
-      .orderBy(desc(pollRevisions.revisionNo))
-      .limit(1);
-    const [latestAcquisition] = await tx
-      .select()
-      .from(pollAcquisitions)
-      .where(eq(pollAcquisitions.pollId, record.id))
-      .orderBy(desc(pollAcquisitions.acquiredAt), desc(pollAcquisitions.id))
-      .limit(1);
-    if (
-      !receipt &&
-      latestAcquisition &&
-      new Date(poll.provenance.acquiredAt).getTime() <
-        latestAcquisition.acquiredAt.getTime()
-    ) {
-      throw new Error("Stale poll acquisition cannot change latest revision");
-    }
-    if (
-      !receipt &&
-      latestAcquisition &&
-      new Date(poll.provenance.acquiredAt).getTime() ===
-        latestAcquisition.acquiredAt.getTime() &&
-      !sameFingerprint(latestAcquisition)
-    ) {
-      throw new Error("Conflicting poll acquisition at the same instant");
-    }
-    const createRevision = !receipt && (!latest || !sameFingerprint(latest));
-    let revisionId: string;
-    let revisionNo: number;
-    if (!createRevision) {
-      const chosenRevisionId = receipt?.revisionId ?? latest?.id;
-      if (!chosenRevisionId)
-        throw new Error("Poll revision could not be loaded");
-      const [chosen] = await tx
-        .select({ id: pollRevisions.id, revisionNo: pollRevisions.revisionNo })
-        .from(pollRevisions)
-        .where(eq(pollRevisions.id, chosenRevisionId));
-      if (!chosen) throw new Error("Poll revision could not be loaded");
-      revisionId = chosen.id;
-      revisionNo = chosen.revisionNo;
-    } else {
-      revisionNo = (latest?.revisionNo ?? 0) + 1;
-      const [revision] = await tx
-        .insert(pollRevisions)
-        .values({
-          pollId: record.id,
-          sourceId: poll.provenance.sourceId,
-          revisionNo,
-          supersedesRevisionId: latest?.id ?? null,
-          sourceRevision: poll.provenance.sourceRevision,
-          contentHash: poll.provenance.contentHash,
-          sourceUrl: poll.provenance.sourceUrl,
-          pollster: poll.pollster,
-          sponsors: poll.sponsors,
-          fieldworkStart: observed.startDate,
-          fieldworkEnd: observed.endDate,
-          ...publicationFields(poll.provenance.declaredPublication),
-          acquiredAt: new Date(poll.provenance.acquiredAt),
-          parserVersion: poll.provenance.parserVersion,
-          transformVersion: poll.provenance.transformationVersion,
-          ingestionRunId: poll.provenance.ingestionRunId,
-        })
-        .returning({ id: pollRevisions.id });
-      if (!revision) throw new Error("Poll revision insert returned no row");
-      revisionId = revision.id;
-      await tx.insert(pollQuestions).values(
-        poll.questions.map((question) => ({
-          revisionId,
-          externalQuestionId: question.questionId,
-          wording: question.wording,
-          kind: question.kind,
-          populationKind: question.population.kind,
-          populationDescription: question.population.description,
-          sampleGroupId: question.sampleGroupId,
-          sampleSize: question.sampleSize,
-        })),
-      );
-      await tx.insert(pollOptions).values(
-        poll.questions.flatMap((question) =>
-          question.options.map((option) => ({
-            revisionId,
-            externalQuestionId: question.questionId,
-            optionId: option.optionId,
-            label: option.label,
-            percentage: option.percentage.toString(),
-          })),
-        ),
-      );
-      await tx
-        .update(pollRevisions)
-        .set({ sealed: true })
-        .where(eq(pollRevisions.id, revisionId));
-    }
-
-    if (!receipt) {
-      await tx.insert(pollAcquisitions).values({
-        pollId: record.id,
-        sourceId: poll.provenance.sourceId,
-        ingestionRunId: poll.provenance.ingestionRunId,
-        revisionId,
-        sourceRevision: poll.provenance.sourceRevision,
-        contentHash: poll.provenance.contentHash,
-        sourceUrl: poll.provenance.sourceUrl,
-        parserVersion: poll.provenance.parserVersion,
-        transformVersion: poll.provenance.transformationVersion,
-        acquiredAt: new Date(poll.provenance.acquiredAt),
-      });
-    }
+    const { revisionId, revisionNo, createRevision } =
+      await resolvePollRevision(tx, poll, record);
 
     await tx
       .insert(pollEditionLinks)

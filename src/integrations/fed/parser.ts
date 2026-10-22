@@ -73,11 +73,7 @@ function hashItem(value: unknown): string {
     .digest("hex");
 }
 
-/** Treat RSS as untrusted data: reject DTD/entities and only retain known plain-text fields. */
-export function parseFederalReservePressFeed(xml: string): {
-  items: FeedItem[];
-  quarantined: QuarantinedItem[];
-} {
+function readFeedRecords(xml: string): unknown[] {
   if (/<!\s*(?:DOCTYPE|ENTITY)\b/i.test(xml))
     throw new CollectionError(
       "schema",
@@ -95,7 +91,15 @@ export function parseFederalReservePressFeed(xml: string): {
   const rawItems = asObject(channel)?.item;
   if (rawItems === undefined)
     throw new CollectionError("schema", "Federal Reserve RSS has no item list");
-  const records = Array.isArray(rawItems) ? rawItems : [rawItems];
+  return Array.isArray(rawItems) ? rawItems : [rawItems];
+}
+
+/** Treat RSS as untrusted data: reject DTD/entities and only retain known plain-text fields. */
+export function parseFederalReservePressFeed(xml: string): {
+  items: FeedItem[];
+  quarantined: QuarantinedItem[];
+} {
+  const records = readFeedRecords(xml);
   const items: FeedItem[] = [];
   const quarantined: QuarantinedItem[] = [];
   for (const record of records) {

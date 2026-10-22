@@ -98,6 +98,50 @@ function defaultSleep(
   });
 }
 
+async function responseRetryDelay(
+  response: Response,
+  attempts: number,
+  requests: number,
+  budget: HttpBudget,
+  now: () => number,
+  random: () => number,
+  remainingMs: () => number,
+): Promise<number> {
+  const code =
+    response.status === 429
+      ? "rate_limited"
+      : response.status >= 500
+        ? "server"
+        : "http_status";
+  const retryable = response.status === 429 || response.status >= 500;
+  const statedDelay = retryAfterMs(response.headers.get("retry-after"), now());
+  await response.body?.cancel().catch(() => undefined);
+  const error = new CollectionError(
+    code,
+    `Source returned HTTP ${response.status}`,
+    {
+      retryable,
+      retryAfterMs: statedDelay,
+    },
+  );
+  if (
+    !retryable ||
+    attempts >= budget.maxAttemptsPerGet ||
+    requests >= budget.maxRequests
+  )
+    throw error;
+  const jitter = Math.max(0, Math.min(1, random()));
+  const backoff =
+    Math.min(30_000, 500 * 2 ** Math.min(attempts - 1, 8)) * (0.5 + jitter);
+  const delay = statedDelay ?? Math.ceil(backoff);
+  if (delay >= remainingMs())
+    throw new CollectionError(code, error.message, {
+      retryable: true,
+      retryAfterMs: delay,
+    });
+  return delay;
+}
+
 /** One client is scoped to one job cycle; beginPage accounts for provider pagination. */
 export function createSourceHttpClient(
   budget: HttpBudget,
@@ -211,66 +255,29 @@ export function createSourceHttpClient(
             receivedAt: new Date(now()).toISOString(),
           };
         }
-        const code =
-          response.status === 429
-            ? "rate_limited"
-            : response.status >= 500
-              ? "server"
-              : "http_status";
-        const retryable = response.status === 429 || response.status >= 500;
-        const statedDelay = retryAfterMs(
-          response.headers.get("retry-after"),
-          now(),
+        const delay = await responseRetryDelay(
+          response,
+          attempts,
+          requests,
+          budget,
+          now,
+          random,
+          remainingMs,
         );
-        await response.body?.cancel().catch(() => undefined);
-        const error = new CollectionError(
-          code,
-          `Source returned HTTP ${response.status}`,
-          { retryable, retryAfterMs: statedDelay },
-        );
-        if (
-          !retryable ||
-          attempts >= budget.maxAttemptsPerGet ||
-          requests >= budget.maxRequests
-        )
-          throw error;
-        const jitter = Math.max(0, Math.min(1, random()));
-        const backoff =
-          Math.min(30_000, 500 * 2 ** Math.min(attempts - 1, 8)) *
-          (0.5 + jitter);
-        const delay = statedDelay ?? Math.ceil(backoff);
-        if (delay >= remainingMs())
-          throw new CollectionError(code, error.message, {
-            retryable: true,
-            retryAfterMs: delay,
-          });
         stopTimer();
         await Promise.race([sleep(delay, signal), aborted]);
       } catch (error) {
         if (error instanceof CollectionError) throw error;
         if (signal.aborted)
           throw new CollectionError("aborted", "Collection aborted");
-        if (
-          attempts >= budget.maxAttemptsPerGet ||
-          requests >= budget.maxRequests ||
-          remainingMs() <= 0
-        ) {
-          throw new CollectionError(
-            "network",
-            "Source network request failed",
-            { retryable: true, cause: error },
-          );
-        }
-        const delay = Math.ceil(
-          Math.min(30_000, 500 * 2 ** Math.min(attempts - 1, 8)) *
-            (0.5 + Math.max(0, Math.min(1, random()))),
+        const delay = networkRetryDelay(
+          error,
+          attempts,
+          requests,
+          budget,
+          random,
+          remainingMs,
         );
-        if (delay >= remainingMs())
-          throw new CollectionError(
-            "network",
-            "Source network request failed",
-            { retryable: true, retryAfterMs: delay },
-          );
         stopTimer();
         await Promise.race([sleep(delay, signal), aborted]);
       } finally {
@@ -295,6 +302,35 @@ export function createSourceHttpClient(
       return { pages, requests, bytes, elapsedMs: now() - startedAt };
     },
   };
+}
+
+function networkRetryDelay(
+  error: unknown,
+  attempts: number,
+  requests: number,
+  budget: HttpBudget,
+  random: () => number,
+  remainingMs: () => number,
+): number {
+  if (
+    attempts >= budget.maxAttemptsPerGet ||
+    requests >= budget.maxRequests ||
+    remainingMs() <= 0
+  )
+    throw new CollectionError("network", "Source network request failed", {
+      retryable: true,
+      cause: error,
+    });
+  const delay = Math.ceil(
+    Math.min(30_000, 500 * 2 ** Math.min(attempts - 1, 8)) *
+      (0.5 + Math.max(0, Math.min(1, random()))),
+  );
+  if (delay >= remainingMs())
+    throw new CollectionError("network", "Source network request failed", {
+      retryable: true,
+      retryAfterMs: delay,
+    });
+  return delay;
 }
 
 async function readBody(

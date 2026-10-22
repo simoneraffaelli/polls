@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { PgBoss } from "pg-boss";
+import { PgBoss, type JobResult } from "pg-boss";
 import { z } from "zod";
 import type { PollObservation } from "../../elections/polling/poll";
 import type { ArticleObservation } from "../../platform/data/article";
@@ -361,6 +361,64 @@ export async function registerPollCollectionWorker(
 ): Promise<void> {
   const pollStore = createPollCollectionPageStore(db);
   const articleStore = createArticleCollectionPageStore(db);
+  async function startSource(
+    sourceId: string,
+    jobId: string,
+  ): Promise<JobResult[]> {
+    try {
+      if (!registry.has(sourceId) && !(await resolveSource?.(sourceId)))
+        throw new CollectionError(
+          "source_disabled",
+          "Source is not registered",
+        );
+      await enqueueCollectionRun(db, boss, sourceId);
+      return [{ id: jobId, status: "completed" }];
+    } catch (error) {
+      const code = error instanceof CollectionError ? error.code : "internal";
+      const terminal = error instanceof CollectionError && !error.retryable;
+      return [
+        {
+          id: jobId,
+          status: terminal ? "deadletter" : "failed",
+          output: { code },
+        },
+      ];
+    }
+  }
+
+  async function failPage(
+    error: unknown,
+    runId: string,
+    job: { id: string; retryCount: number },
+  ): Promise<JobResult[]> {
+    const code = error instanceof CollectionError ? error.code : "internal";
+    if (
+      error instanceof CollectionError &&
+      error.retryable &&
+      error.retryAfterMs !== null
+    ) {
+      if (await deferForRetryAfter(db, boss, runId, error.retryAfterMs))
+        return [
+          { id: job.id, status: "completed", output: { code: "deferred" } },
+        ];
+      return [
+        { id: job.id, status: "deadletter", output: { code: "rate_limited" } },
+      ];
+    }
+    const terminal =
+      (error instanceof CollectionError &&
+        !error.retryable &&
+        error.code !== "aborted") ||
+      job.retryCount >= RETRY_LIMIT;
+    await updateRunError(db, runId, code, terminal);
+    return [
+      {
+        id: job.id,
+        status: terminal ? "deadletter" : "failed",
+        output: { code },
+      },
+    ];
+  }
   await boss.work<z.infer<typeof jobSchema>>(
     COLLECTION_QUEUE,
     {
@@ -377,29 +435,7 @@ export async function registerPollCollectionWorker(
           { id: job.id, status: "deadletter", output: { code: "invalid_job" } },
         ];
       if (parsed.data.kind === "start") {
-        try {
-          if (
-            !registry.has(parsed.data.sourceId) &&
-            !(await resolveSource?.(parsed.data.sourceId))
-          )
-            throw new CollectionError(
-              "source_disabled",
-              "Source is not registered",
-            );
-          await enqueueCollectionRun(db, boss, parsed.data.sourceId);
-          return [{ id: job.id, status: "completed" }];
-        } catch (error) {
-          const code =
-            error instanceof CollectionError ? error.code : "internal";
-          const terminal = error instanceof CollectionError && !error.retryable;
-          return [
-            {
-              id: job.id,
-              status: terminal ? "deadletter" : "failed",
-              output: { code },
-            },
-          ];
-        }
+        return startSource(parsed.data.sourceId, job.id);
       }
       const runId = parsed.data.runId;
       try {
@@ -460,38 +496,7 @@ export async function registerPollCollectionWorker(
         await enqueueNextPage(db, boss, runId);
         return [{ id: job.id, status: "completed" }];
       } catch (error) {
-        const code = error instanceof CollectionError ? error.code : "internal";
-        if (
-          error instanceof CollectionError &&
-          error.retryable &&
-          error.retryAfterMs !== null
-        ) {
-          if (await deferForRetryAfter(db, boss, runId, error.retryAfterMs)) {
-            return [
-              { id: job.id, status: "completed", output: { code: "deferred" } },
-            ];
-          }
-          return [
-            {
-              id: job.id,
-              status: "deadletter",
-              output: { code: "rate_limited" },
-            },
-          ];
-        }
-        const terminal =
-          (error instanceof CollectionError &&
-            !error.retryable &&
-            error.code !== "aborted") ||
-          job.retryCount >= RETRY_LIMIT;
-        await updateRunError(db, runId, code, terminal);
-        return [
-          {
-            id: job.id,
-            status: terminal ? "deadletter" : "failed",
-            output: { code },
-          },
-        ];
+        return failPage(error, runId, job);
       }
     },
   );

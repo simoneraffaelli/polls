@@ -47,6 +47,20 @@ Il controllo container del commit `502436a` ha misurato 40 letture, concorrenza 
 
 ## Risultati della revisione
 
+### Controllo CI e complessità — 22 ottobre 2026
+
+La verifica delle esecuzioni GitHub ha confermato che l'ultima CI del codice, [`0f8f307`](https://github.com/simoneraffaelli/polls/actions/runs/39786217506), era già verde. Le esecuzioni rosse precedenti includevano fixture DB incompatibili con i vincoli, un'etichetta browser superata e il test di login che attendeva un titolo presente anche nella pagina non autenticata. Le correzioni erano già nel codice; il successivo commit documentale `c90c97a` conteneva `[skip ci]` e non aveva avviato un'altra verifica.
+
+L'inventario iniziale con le regole native ESLint ha misurato 135 file TypeScript/TSX in `src/` e 752 funzioni: 22 funzioni oltre complessità ciclomatica 20, massimo 129; 12 funzioni oltre 200 righe e 6 file oltre 500 righe, escluse righe vuote e commenti. Il controllo usa la variante **classic**, compresi i punti decisionali riconosciuti da ESLint in TypeScript/TSX. La dimensione dei file viene controllata separatamente dalla complessità delle funzioni.
+
+Le soglie sono bloccanti nella configurazione ordinaria `pnpm lint`, eseguita in CI: 20 / 200 / 500. Non sono introdotti pacchetti, whitelist, soppressioni o soglie speciali per il codice esistente. Un test della configurazione verifica la soglia ciclomatica, il rifiuto dei superamenti in TS e TSX e l'esclusione di commenti e righe vuote dal conteggio delle righe.
+
+Il refactor separa validazione e calcolo del modello, viste della pagina edizione, letture e scritture dei repository, verifiche delle evidenze e dichiarazioni dello schema per dominio. La revisione ha confrontato i confini transazionali, l'ordine dei lock, i controlli temporali e i budget HTTP. Tutte le 45 dichiarazioni di tabella conservano gli stessi inizializzatori; `drizzle-kit generate` conferma zero cambiamenti allo schema e nessuna migrazione necessaria. Un confronto temporaneo con `c90c97a` su una fixture deterministica (due gare, un sondaggio, 500 iterazioni del modello, 100 dello scenario e rotte del catalogo) ha prodotto JSON identico; la valutazione è coperta dai test mirati, non da quel confronto. I 95 test ordinari locali passano.
+
+L'inventario finale copre 157 file e 823 funzioni, con **zero superamenti**: complessità massima 20 (prima 129), funzione più lunga 196 righe effettive e file più lungo 486. I limiti riguardano codice applicativo e worker; fixture, test, script operativi e codice generato non rientrano in queste tre soglie. Il lint ordinario continua a verificare anche test e script secondo le altre regole del progetto.
+
+Per questo incremento passano localmente typecheck, lint completo, formattazione, 95 test ordinari e build web/worker. PostgreSQL reale, browser con fixture amministrative e container sono verificati dalla [CI del branch](https://github.com/simoneraffaelli/polls/actions?query=branch%3Acodex%2Fimplementation-foundations) sul commit pubblicato; non vengono dichiarati eseguiti in locale.
+
 La revisione ha rafforzato idempotenza e ricevute delle acquisizioni, lock e sigilli dei dati, termine controllato dopo l'attesa dei lock, preservazione delle date prive di fuso, confronto esatto di struttura/opzioni/revisioni del modello, correzioni amministrative append-only e pubblicazione nella stessa transazione del run. I nuovi run rispettano le esclusioni correnti; quelli pubblicati restano ricostruibili.
 
 Il modello distingue maggioranza dei seggi per partito e controllo per caucus; include shock condivisi nazionali e regionali. Lo scenario usa lo stesso nucleo di simulazione, riceve solo stime aggregate e non scrive la previsione pubblicata. Le letture controllano il termine anche con worker fermo. Nessun endpoint pubblico avvia simulazioni sul server.

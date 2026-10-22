@@ -28,6 +28,58 @@ type Payload = {
   content: string;
 };
 
+function ImportPreview({ preview }: { preview: Preview }) {
+  return (
+    <div className="mt-4 rounded border p-4 text-sm">
+      <p>
+        {preview.preview.totalRows} righe · {preview.preview.validRows} valide ·{" "}
+        {preview.preview.invalidRows} da correggere
+      </p>
+      {preview.preview.errors.length > 0 && (
+        <ul className="mt-2 list-inside list-disc">
+          {preview.preview.errors.map((error, index) => (
+            <li key={index}>
+              Riga {error.row}: {error.code} {error.path}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ImportCommitForm({
+  preview,
+  busy,
+  onSubmit,
+}: {
+  preview: Preview;
+  busy: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={onSubmit}>
+      <label className="grid gap-1 text-sm">
+        Motivo dell’import
+        <input
+          required
+          minLength={3}
+          maxLength={500}
+          name="reason"
+          className="min-w-64 rounded border p-2 text-black"
+        />
+      </label>
+      <button
+        disabled={busy}
+        type="submit"
+        className="rounded border px-3 py-2 text-sm"
+      >
+        Salva {preview.preview.validRows} rilevazioni
+      </button>
+    </form>
+  );
+}
+
 export function AdminImportForm({
   sourceId,
   ready,
@@ -209,43 +261,9 @@ export function AdminImportForm({
           Mostra anteprima
         </button>
       </form>
-      {preview && (
-        <div className="mt-4 rounded border p-4 text-sm">
-          <p>
-            {preview.preview.totalRows} righe · {preview.preview.validRows}{" "}
-            valide · {preview.preview.invalidRows} da correggere
-          </p>
-          {preview.preview.errors.length > 0 && (
-            <ul className="mt-2 list-inside list-disc">
-              {preview.preview.errors.map((error, index) => (
-                <li key={index}>
-                  Riga {error.row}: {error.code} {error.path}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {preview && <ImportPreview preview={preview} />}
       {payload && preview?.previewId && (
-        <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={commit}>
-          <label className="grid gap-1 text-sm">
-            Motivo dell’import
-            <input
-              required
-              minLength={3}
-              maxLength={500}
-              name="reason"
-              className="min-w-64 rounded border p-2 text-black"
-            />
-          </label>
-          <button
-            disabled={busy}
-            type="submit"
-            className="rounded border px-3 py-2 text-sm"
-          >
-            Salva {preview.preview.validRows} rilevazioni
-          </button>
-        </form>
+        <ImportCommitForm preview={preview} busy={busy} onSubmit={commit} />
       )}
       {message && (
         <p role="status" className="mt-3 text-sm">

@@ -18,15 +18,10 @@ export type ScenarioResult = Readonly<{
   result: ModelResult;
 }>;
 
-/** Caller retrieves the published run and sealed snapshot; this verifies their exact association. */
-export async function runMidtermsScenario(input: {
-  base: PublishedBaseRun;
-  snapshot: ModelSnapshot;
-  swingPoints: number;
-  iterations: number;
-  seed: string;
-}): Promise<ScenarioResult> {
-  const { base, snapshot, swingPoints, iterations, seed } = input;
+function assertPublishedBase(
+  base: PublishedBaseRun,
+  snapshot: ModelSnapshot,
+): void {
   if (
     !base.publicationId ||
     !base.runId ||
@@ -42,24 +37,45 @@ export async function runMidtermsScenario(input: {
   ) {
     throw new Error("Scenario base is not a matching published run");
   }
-  if (
-    !/^[a-f0-9]{64}$/.test(base.inputSnapshotHash) ||
-    (await snapshotDigest(snapshot)) !== base.inputSnapshotHash
-  ) {
-    throw new Error("Published run snapshot digest mismatch");
-  }
+}
+
+function assertScenarioBudget(
+  swingPoints: number,
+  iterations: number,
+  races: number,
+  seed: string,
+): void {
   if (
     !Number.isFinite(swingPoints) ||
     Math.abs(swingPoints) > 5 ||
     !Number.isInteger(iterations) ||
     iterations < 100 ||
     iterations > 2000 ||
-    iterations * snapshot.races.length > 1_000_000 ||
+    iterations * races > 1_000_000 ||
     !seed ||
     seed.length > 100
   ) {
     throw new Error("Scenario parameters exceed bounds");
   }
+}
+
+/** Caller retrieves the published run and sealed snapshot; this verifies their exact association. */
+export async function runMidtermsScenario(input: {
+  base: PublishedBaseRun;
+  snapshot: ModelSnapshot;
+  swingPoints: number;
+  iterations: number;
+  seed: string;
+}): Promise<ScenarioResult> {
+  const { base, snapshot, swingPoints, iterations, seed } = input;
+  assertPublishedBase(base, snapshot);
+  if (
+    !/^[a-f0-9]{64}$/.test(base.inputSnapshotHash) ||
+    (await snapshotDigest(snapshot)) !== base.inputSnapshotHash
+  ) {
+    throw new Error("Published run snapshot digest mismatch");
+  }
+  assertScenarioBudget(swingPoints, iterations, snapshot.races.length, seed);
   const result = simulateBaseline({ ...snapshot, seed }, iterations, {
     uniformSwingPoints: swingPoints,
   });

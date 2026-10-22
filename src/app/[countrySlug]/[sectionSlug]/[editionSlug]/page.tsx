@@ -41,6 +41,91 @@ const scope = {
   editionId: "edition:us:midterms:2026",
 } as const;
 
+type Section = NonNullable<ReturnType<typeof catalog.sectionBySlugs>>;
+type Edition = NonNullable<ReturnType<typeof catalog.editionBySlugs>>;
+
+function OverviewMetrics({
+  polls,
+  forecasts,
+  section,
+  edition,
+}: {
+  polls: Awaited<ReturnType<typeof readPublicPolls>>;
+  forecasts: Awaited<ReturnType<typeof readPublicForecastCards>>;
+  section: Section;
+  edition: Edition;
+}) {
+  const includedPolls =
+    polls.status === "ready"
+      ? polls.value.items.filter((poll) => poll.currentLinkIncluded).length
+      : 0;
+  return (
+    <section className="content-section" aria-labelledby="edition-metrics">
+      <h2 className="section-heading" id="edition-metrics">
+        Dati e significati
+      </h2>
+      <div className="metric-grid">
+        <MetricCard
+          title="Sondaggi acquisiti"
+          state={
+            polls.status === "ready" && includedPolls > 0
+              ? {
+                  status: "ready",
+                  value: {
+                    kind: "vote_intention",
+                    label: "Studi nella prima pagina",
+                    valueText: String(includedPolls),
+                    detail: "Non sono probabilità di vittoria",
+                  },
+                }
+              : {
+                  status: polls.status === "error" ? "error" : "empty",
+                  message:
+                    polls.status === "ready"
+                      ? "Nessun sondaggio attualmente incluso nella prima pagina."
+                      : polls.message,
+                }
+          }
+        />
+        <section className="metric-card" aria-label="Previsioni pubblicate">
+          <h3>Previsioni pubblicate</h3>
+          {forecasts.status === "ready" ? (
+            <>
+              <p>
+                {forecasts.value.length > 0
+                  ? `${forecasts.value.length} domande con un run sigillato e pubblicato.`
+                  : "Nessun run sigillato e pubblicato per questa edizione."}
+              </p>
+              <p>
+                Stato corrente delle pubblicazioni, distinto dal filtro
+                temporale dei sondaggi.
+              </p>
+              <Link href={midtermsScenariosPath(section, edition)}>
+                Consulta run e scenari
+              </Link>
+            </>
+          ) : (
+            <DataNotice
+              state={{
+                status: forecasts.status === "error" ? "error" : "empty",
+                message: forecasts.message,
+              }}
+            />
+          )}
+        </section>
+        <MetricCard
+          title="Prezzi di mercato"
+          state={{
+            status: "empty",
+            message:
+              "Nessun mercato associato a una domanda equivalente e autorizzato alla visualizzazione.",
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { countrySlug, sectionSlug, editionSlug } = await params;
   const section = catalog.sectionBySlugs(countrySlug, sectionSlug);
@@ -94,10 +179,6 @@ export default async function EditionPage({ params, searchParams }: Props) {
               : ("unavailable" as const),
           acquiredAt: null,
         };
-  const includedPolls =
-    polls.status === "ready"
-      ? polls.value.items.filter((poll) => poll.currentLinkIncluded).length
-      : 0;
   const view = (id: string) =>
     catalog.viewsForEdition(section, edition).find((item) => item.id === id)!;
   return (
@@ -118,69 +199,12 @@ export default async function EditionPage({ params, searchParams }: Props) {
         <span className="eyebrow">Stato dell’osservatorio</span>
         <FreshnessBadge freshness={freshness} />
       </div>
-      <section className="content-section" aria-labelledby="edition-metrics">
-        <h2 className="section-heading" id="edition-metrics">
-          Dati e significati
-        </h2>
-        <div className="metric-grid">
-          <MetricCard
-            title="Sondaggi acquisiti"
-            state={
-              polls.status === "ready" && includedPolls > 0
-                ? {
-                    status: "ready",
-                    value: {
-                      kind: "vote_intention",
-                      label: "Studi nella prima pagina",
-                      valueText: String(includedPolls),
-                      detail: "Non sono probabilità di vittoria",
-                    },
-                  }
-                : {
-                    status: polls.status === "error" ? "error" : "empty",
-                    message:
-                      polls.status === "ready"
-                        ? "Nessun sondaggio attualmente incluso nella prima pagina."
-                        : polls.message,
-                  }
-            }
-          />
-          <section className="metric-card" aria-label="Previsioni pubblicate">
-            <h3>Previsioni pubblicate</h3>
-            {forecasts.status === "ready" ? (
-              <>
-                <p>
-                  {forecasts.value.length > 0
-                    ? `${forecasts.value.length} domande con un run sigillato e pubblicato.`
-                    : "Nessun run sigillato e pubblicato per questa edizione."}
-                </p>
-                <p>
-                  Stato corrente delle pubblicazioni, distinto dal filtro
-                  temporale dei sondaggi.
-                </p>
-                <Link href={midtermsScenariosPath(section, edition)}>
-                  Consulta run e scenari
-                </Link>
-              </>
-            ) : (
-              <DataNotice
-                state={{
-                  status: forecasts.status === "error" ? "error" : "empty",
-                  message: forecasts.message,
-                }}
-              />
-            )}
-          </section>
-          <MetricCard
-            title="Prezzi di mercato"
-            state={{
-              status: "empty",
-              message:
-                "Nessun mercato associato a una domanda equivalente e autorizzato alla visualizzazione.",
-            }}
-          />
-        </div>
-      </section>
+      <OverviewMetrics
+        polls={polls}
+        forecasts={forecasts}
+        section={section}
+        edition={edition}
+      />
       <section
         className="content-section"
         aria-labelledby="published-forecast-title"

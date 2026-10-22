@@ -658,6 +658,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 **Attività**
 
 - Eseguire test end-to-end, accessibilità, sicurezza applicativa e carico rappresentativo.
+- Applicare in CI il controllo ESLint su tutto il codice TypeScript/TSX in `src/`: complessità ciclomatica classic massima 20 per funzione, massimo 200 righe per funzione e 500 per file, escluse righe vuote e commenti. Le ultime due soglie misurano dimensione, non complessità ciclomatica dei moduli; i superamenti richiedono separazione delle responsabilità e verifica della semantica, senza soppressioni del codice esistente.
 - Predisporre un ambiente di collaudo isolato con immagini e configurazione rappresentative del rilascio; verificare reti private, persistenza, limiti di risorse, backup esterno e ripristino prima dell'apertura pubblica.
 - Misurare gli obiettivi del paragrafo 15 con carico web e worker contemporanei e risorse equivalenti a quelle previste; documentare differenze dall'ambiente finale e controlli da ripetere nella fase 10.
 - Provare errori delle fonti, timeout, dati malformati, riavvii e job ripetuti.

@@ -28,7 +28,7 @@ La copertura di VoteHub per singole gare e archivi storici non è ancora dimostr
 
 Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senato, sondaggi, notizie e metodo, in italiano. Le pagine leggono l'archivio PostgreSQL con provenienza, filtri, paginazione e stati espliciti di assenza o errore. Il catalogo strutturale comprende 470 gare; l'amministrazione consente gestione delle fonti e import controllato. **Nessuna fonte è stata attivata in produzione, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
 
-La [CI del codice completato](https://github.com/simoneraffaelli/polls/actions/runs/39786217506) supera 94 test ordinari, 29 test PostgreSQL, 6 test browser, build e controlli dei container. Il collaudo sul VPS e la validazione statistica rimangono separati da queste verifiche automatiche.
+La [CI precedente al controllo della complessità](https://github.com/simoneraffaelli/polls/actions/runs/39786217506) ha superato 94 test ordinari, 29 test PostgreSQL, 6 test browser, build e controlli dei container. Il refactor successivo supera localmente 95 test ordinari, typecheck, lint, formattazione e build; tutti i file applicativi rispettano le nuove soglie descritte sotto. Le [esecuzioni CI del branch](https://github.com/simoneraffaelli/polls/actions?query=branch%3Acodex%2Fimplementation-foundations) riportano gli esiti remoti dei singoli commit. Il collaudo sul VPS e la validazione statistica rimangono separati da queste verifiche automatiche.
 
 - [Piano di implementazione](docs/IMPLEMENTATION_PLAN.md): architettura, fasi, criteri di completamento, fonti, verifiche, costi e distribuzione.
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
@@ -77,6 +77,8 @@ pnpm start
 `pnpm start` prepara gli asset accanto al server standalone e lo avvia; `HOSTNAME` e `PORT` possono essere impostati nell'ambiente. I test browser usano lo stesso comando. Nel container gli asset sono già copiati durante la build.
 
 ## Controlli
+
+`pnpm lint` include controlli bloccanti ESLint su tutti i file TypeScript e TSX in `src/`: complessità ciclomatica **classic ≤ 20** per funzione, **≤ 200 righe** per funzione e **≤ 500 righe** per file. I limiti di righe escludono commenti e righe vuote; misurano la dimensione, non la complessità ciclomatica del modulo. La stessa configurazione è eseguita in CI, senza dipendenze aggiuntive o eccezioni per il codice esistente. Le soglie richiedono responsabilità più piccole quando vengono superate; non sostituiscono revisione e test di comportamento. La metrica è descritta nella [documentazione ESLint](https://eslint.org/docs/latest/rules/complexity).
 
 ```sh
 pnpm typecheck

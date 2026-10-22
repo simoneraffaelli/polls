@@ -131,6 +131,7 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 - Proseguire nelle fasi implementabili senza fermarsi per una revisione umana a ogni incremento. Usare i sottoagenti richiesti dall'utente e la revisione dell'orchestratore; commit e push autorizzati sono tappe di avanzamento. Il collaudo operativo e il rilascio sono rinviati al deployment dell'utente, mantenendo esplicite le prove ancora da eseguire.
 - Scegliere controlli proporzionati: per soli documenti verificare coerenza, percorsi e collegamenti; non inventare test applicativi assenti.
 - Per il codice usare i comandi definiti nel progetto: typecheck, lint, test mirati e build quando pertinenti.
+- `pnpm lint` applica a tutto `src/**/*.{ts,tsx}` complessità ciclomatica ESLint classic massima 20, massimo 200 righe per funzione e 500 per file (commenti e righe vuote esclusi). Risolvere i superamenti separando responsabilità; non alzare soglie o aggiungere soppressioni per far passare il controllo. I limiti di dimensione non sono una misura della complessità ciclomatica del modulo. Preservare formule, ordine del generatore casuale, confini transazionali e controlli di sicurezza durante le estrazioni.
 - Test di dominio per regole e formule; fixture per contratti dei provider; PostgreSQL reale di test per transazioni e vincoli; Playwright per flussi essenziali.
 - I test ordinari non dipendono dalle API esterne. Le prove dal vivo sono separate e limitate.
 - Verificare retry, riavvio, rettifiche, input mancanti, isolamento di paesi/edizioni e ordine delle pubblicazioni.

@@ -32,20 +32,28 @@ export function parseCsv(
     row = [];
   }
 
+  function readQuotedCharacter(
+    char: string,
+    next: string | undefined,
+  ): boolean {
+    const escapedQuote = char === '"' && next === '"';
+    if (escapedQuote) {
+      field += '"';
+    } else if (char === '"') {
+      quoted = false;
+      afterQuote = true;
+    } else {
+      field += char;
+    }
+    if (field.length > limits.maxCellChars)
+      throw new CollectionError("budget", "CSV cell limit exceeded");
+    return escapedQuote;
+  }
+
   for (let index = 0; index < input.length; index += 1) {
     const char = input[index];
     if (quoted) {
-      if (char === '"' && input[index + 1] === '"') {
-        field += '"';
-        index += 1;
-      } else if (char === '"') {
-        quoted = false;
-        afterQuote = true;
-      } else {
-        field += char;
-      }
-      if (field.length > limits.maxCellChars)
-        throw new CollectionError("budget", "CSV cell limit exceeded");
+      if (readQuotedCharacter(char, input[index + 1])) index += 1;
       continue;
     }
     if (char === '"') {
@@ -67,6 +75,10 @@ export function parseCsv(
   }
   if (quoted) throw new CollectionError("schema", "Unclosed CSV quote");
   if (field || row.length || afterQuote) addRow();
+  return recordsFromRows(rows);
+}
+
+function recordsFromRows(rows: string[][]): Record<string, string>[] {
   const [headers, ...values] = rows;
   if (
     !headers ||

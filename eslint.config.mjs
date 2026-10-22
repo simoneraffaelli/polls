@@ -37,6 +37,15 @@ export default defineConfig([
       },
     },
     rules: {
+      complexity: ["error", { max: 20, variant: "classic" }],
+      "max-lines-per-function": [
+        "error",
+        { max: 200, skipBlankLines: true, skipComments: true },
+      ],
+      "max-lines": [
+        "error",
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
       "import/no-restricted-paths": [
         "error",
         {

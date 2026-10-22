@@ -101,7 +101,12 @@ function validatePage<T>(
   ) {
     throw new CollectionError("schema", "Invalid provider page or cursor");
   }
-  for (const quarantine of page.quarantined) {
+  validateQuarantine(page.quarantined);
+  validateProvenance(page.observations, run, page.acquiredAt);
+}
+
+function validateQuarantine(items: SourcePage<unknown>["quarantined"]): void {
+  for (const quarantine of items) {
     if (
       !quarantine ||
       (quarantine.externalId !== null &&
@@ -112,7 +117,14 @@ function validatePage<T>(
       throw new CollectionError("schema", "Invalid quarantine metadata");
     }
   }
-  for (const observation of page.observations) {
+}
+
+function validateProvenance(
+  observations: readonly unknown[],
+  run: CollectionRun,
+  acquiredAt: string,
+): void {
+  for (const observation of observations) {
     const provenance =
       observation &&
       typeof observation === "object" &&
@@ -127,7 +139,7 @@ function validatePage<T>(
       !("ingestionRunId" in provenance) ||
       provenance.ingestionRunId !== run.runId ||
       !("acquiredAt" in provenance) ||
-      provenance.acquiredAt !== page.acquiredAt
+      provenance.acquiredAt !== acquiredAt
     ) {
       throw new CollectionError(
         "schema",

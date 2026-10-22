@@ -61,8 +61,35 @@ function unique(value: string, seen: Set<string>, kind: string): void {
   seen.add(value);
 }
 
-/** Validates registration once; readers use immutable definitions and local indexes. */
-export function createCatalog(
+function assertCountryDefinition(input: CountryDefinition): void {
+  if (
+    !input.id ||
+    !input.name ||
+    !input.description ||
+    !/^[A-Z]{2}$/.test(input.code)
+  ) {
+    throw new Error(`Invalid country definition: ${input.id}`);
+  }
+}
+
+function assertViewDefinition(input: EditionViewDefinition): void {
+  if (
+    !input.id ||
+    !input.name ||
+    !input.description ||
+    !["competition", "polls", "news", "methodology"].includes(input.kind)
+  ) {
+    throw new Error(`Invalid edition view definition: ${input.id}`);
+  }
+  if (
+    !slugPattern.test(input.slug) ||
+    ["admin", "api", "_next"].includes(input.slug)
+  ) {
+    throw new Error(`Invalid edition view slug: ${input.slug}`);
+  }
+}
+
+function registerDefinitions(
   countries: readonly CountryDefinition[],
   sections: readonly SectionDefinition[],
   views: readonly EditionViewDefinition[] = [],
@@ -82,14 +109,7 @@ export function createCatalog(
   const viewsByEdition = new Map<string, EditionViewDefinition[]>();
 
   for (const input of countries) {
-    if (
-      !input.id ||
-      !input.name ||
-      !input.description ||
-      !/^[A-Z]{2}$/.test(input.code)
-    ) {
-      throw new Error(`Invalid country definition: ${input.id}`);
-    }
+    assertCountryDefinition(input);
     checkSlug(input.slug, "country");
     unique(input.id, countryIds, "country id");
     unique(input.code, countryCodes, "country code");
@@ -148,20 +168,7 @@ export function createCatalog(
     if (!editionsById.has(input.editionId)) {
       throw new Error(`Unknown edition view reference: ${input.editionId}`);
     }
-    if (
-      !input.id ||
-      !input.name ||
-      !input.description ||
-      !["competition", "polls", "news", "methodology"].includes(input.kind)
-    ) {
-      throw new Error(`Invalid edition view definition: ${input.id}`);
-    }
-    if (
-      !slugPattern.test(input.slug) ||
-      ["admin", "api", "_next"].includes(input.slug)
-    ) {
-      throw new Error(`Invalid edition view slug: ${input.slug}`);
-    }
+    assertViewDefinition(input);
     unique(input.id, viewIds, "edition view id");
     const editionViews = viewsByEdition.get(input.editionId)!;
     if (editionViews.some((view) => view.slug === input.slug)) {
@@ -184,6 +191,33 @@ export function createCatalog(
       Object.freeze([...entries]),
     ]),
   );
+
+  return {
+    countriesById,
+    countriesBySlug,
+    sectionsById,
+    sectionsByRoute,
+    registeredViewsByEdition,
+    registeredCountries,
+    registeredSectionsByCountry,
+  };
+}
+
+/** Validates registration once; readers use immutable definitions and local indexes. */
+export function createCatalog(
+  countries: readonly CountryDefinition[],
+  sections: readonly SectionDefinition[],
+  views: readonly EditionViewDefinition[] = [],
+) {
+  const {
+    countriesById,
+    countriesBySlug,
+    sectionsById,
+    sectionsByRoute,
+    registeredViewsByEdition,
+    registeredCountries,
+    registeredSectionsByCountry,
+  } = registerDefinitions(countries, sections, views);
 
   const countryBySlug = (slug: string) => countriesBySlug.get(slug);
   const sectionBySlugs = (countrySlug: string, sectionSlug: string) => {

@@ -44,6 +44,107 @@ function controlOutcome(
   return "no_majority";
 }
 
+function initialSeatCounts(
+  partySeats: ReadonlyMap<string, readonly number[]>,
+  caucusSeats: ReadonlyMap<string, readonly number[]>,
+  control: ControlDefinition | null,
+) {
+  const partyCounts = new Map([...partySeats.keys()].map((id) => [id, 0]));
+  const caucusCounts = new Map([...caucusSeats.keys()].map((id) => [id, 0]));
+  let unknownSeats = 0;
+  for (const holdover of control?.holdovers ?? []) {
+    partyCounts.set(
+      holdover.partyId,
+      (partyCounts.get(holdover.partyId) ?? 0) + holdover.count,
+    );
+    if (holdover.caucusId) {
+      caucusCounts.set(
+        holdover.caucusId,
+        (caucusCounts.get(holdover.caucusId) ?? 0) + holdover.count,
+      );
+    } else unknownSeats += holdover.count;
+  }
+  return { partyCounts, caucusCounts, unknownSeats };
+}
+
+function sampleRaces(input: {
+  races: readonly RaceEstimate[];
+  parameters: BaselineParameters;
+  swingPoints: number;
+  nationalShock: number;
+  regionalShocks: ReadonlyMap<string, number>;
+  normal: () => number;
+  wins: Map<string, number>;
+  partyCounts: Map<string, number>;
+  caucusCounts: Map<string, number>;
+}): number {
+  let unknownSeats = 0;
+  for (const race of input.races) {
+    const localSd = Math.hypot(
+      race.posteriorSdPoints,
+      input.parameters.localErrorSd,
+    );
+    const margin =
+      race.meanMarginPoints +
+      input.swingPoints +
+      input.nationalShock +
+      input.regionalShocks.get(race.regionId)! +
+      input.normal() * localSd;
+    const positiveWins = margin >= 0;
+    if (positiveWins)
+      input.wins.set(race.raceId, input.wins.get(race.raceId)! + 1);
+    const outcome = positiveWins ? race.positive : race.negative;
+    input.partyCounts.set(
+      outcome.partyId,
+      (input.partyCounts.get(outcome.partyId) ?? 0) + 1,
+    );
+    if (outcome.caucusId) {
+      input.caucusCounts.set(
+        outcome.caucusId,
+        (input.caucusCounts.get(outcome.caucusId) ?? 0) + 1,
+      );
+    } else unknownSeats += 1;
+  }
+  return unknownSeats;
+}
+
+function assertSimulationBudget(
+  swingPoints: number,
+  iterations: number,
+  raceCount: number,
+): void {
+  if (!Number.isFinite(swingPoints) || Math.abs(swingPoints) > 5) {
+    throw new Error("Uniform swing exceeds model bounds");
+  }
+  if (
+    !Number.isInteger(iterations) ||
+    iterations < 100 ||
+    iterations > 20_000 ||
+    iterations * raceCount > 5_000_000
+  ) {
+    throw new Error("Simulation exceeds iteration or race-work budget");
+  }
+}
+
+function seatIds(
+  races: readonly RaceEstimate[],
+  control: ControlDefinition | null,
+) {
+  const partyIds = new Set<string>();
+  const caucusIds = new Set<string>();
+  for (const race of races) {
+    partyIds.add(race.positive.partyId);
+    partyIds.add(race.negative.partyId);
+    if (race.positive.caucusId) caucusIds.add(race.positive.caucusId);
+    if (race.negative.caucusId) caucusIds.add(race.negative.caucusId);
+  }
+  for (const holdover of control?.holdovers ?? []) {
+    partyIds.add(holdover.partyId);
+    if (holdover.caucusId) caucusIds.add(holdover.caucusId);
+  }
+  return { partyIds, caucusIds };
+}
+
 /** Pure, bounded Monte Carlo. It never labels itself validated or publishes a forecast. */
 export function simulateBaseline(
   snapshot: ModelSnapshot,
@@ -86,35 +187,14 @@ export function simulateEstimates(
     iterations,
   } = input;
   const swingPoints = input.uniformSwingPoints ?? 0;
-  if (!Number.isFinite(swingPoints) || Math.abs(swingPoints) > 5) {
-    throw new Error("Uniform swing exceeds model bounds");
-  }
-  if (
-    !Number.isInteger(iterations) ||
-    iterations < 100 ||
-    iterations > 20_000 ||
-    iterations * estimates.length > 5_000_000
-  ) {
-    throw new Error("Simulation exceeds iteration or race-work budget");
-  }
+  assertSimulationBudget(swingPoints, iterations, estimates.length);
   const sortedRaces = [...estimates].sort((a, b) =>
     a.raceId.localeCompare(b.raceId),
   );
   const regionIds = [
     ...new Set(sortedRaces.map((race) => race.regionId)),
   ].sort();
-  const partyIds = new Set<string>();
-  const caucusIds = new Set<string>();
-  for (const race of sortedRaces) {
-    partyIds.add(race.positive.partyId);
-    partyIds.add(race.negative.partyId);
-    if (race.positive.caucusId) caucusIds.add(race.positive.caucusId);
-    if (race.negative.caucusId) caucusIds.add(race.negative.caucusId);
-  }
-  for (const holdover of control?.holdovers ?? []) {
-    partyIds.add(holdover.partyId);
-    if (holdover.caucusId) caucusIds.add(holdover.caucusId);
-  }
+  const { partyIds, caucusIds } = seatIds(sortedRaces, control);
   const partySeats = new Map(
     [...partyIds].sort().map((id) => [id, [] as number[]]),
   );
@@ -130,46 +210,24 @@ export function simulateEstimates(
     const regionalShocks = new Map(
       regionIds.map((id) => [id, normal() * parameters.regionalErrorSd]),
     );
-    const partyCounts = new Map([...partySeats.keys()].map((id) => [id, 0]));
-    const caucusCounts = new Map([...caucusSeats.keys()].map((id) => [id, 0]));
-    let unknownSeats = 0;
-    for (const holdover of control?.holdovers ?? []) {
-      partyCounts.set(
-        holdover.partyId,
-        (partyCounts.get(holdover.partyId) ?? 0) + holdover.count,
-      );
-      if (holdover.caucusId) {
-        caucusCounts.set(
-          holdover.caucusId,
-          (caucusCounts.get(holdover.caucusId) ?? 0) + holdover.count,
-        );
-      } else unknownSeats += holdover.count;
-    }
-    for (const race of sortedRaces) {
-      const localSd = Math.hypot(
-        race.posteriorSdPoints,
-        parameters.localErrorSd,
-      );
-      const margin =
-        race.meanMarginPoints +
-        swingPoints +
-        nationalShock +
-        regionalShocks.get(race.regionId)! +
-        normal() * localSd;
-      const positiveWins = margin >= 0;
-      if (positiveWins) wins.set(race.raceId, wins.get(race.raceId)! + 1);
-      const outcome = positiveWins ? race.positive : race.negative;
-      partyCounts.set(
-        outcome.partyId,
-        (partyCounts.get(outcome.partyId) ?? 0) + 1,
-      );
-      if (outcome.caucusId) {
-        caucusCounts.set(
-          outcome.caucusId,
-          (caucusCounts.get(outcome.caucusId) ?? 0) + 1,
-        );
-      } else unknownSeats += 1;
-    }
+    const {
+      partyCounts,
+      caucusCounts,
+      unknownSeats: holdoverUnknown,
+    } = initialSeatCounts(partySeats, caucusSeats, control);
+    const unknownSeats =
+      holdoverUnknown +
+      sampleRaces({
+        races: sortedRaces,
+        parameters,
+        swingPoints,
+        nationalShock,
+        regionalShocks,
+        normal,
+        wins,
+        partyCounts,
+        caucusCounts,
+      });
     for (const [id, values] of partySeats)
       values.push(partyCounts.get(id) ?? 0);
     for (const [id, values] of caucusSeats)

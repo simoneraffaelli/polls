@@ -24,6 +24,96 @@ import {
 
 const MAX_QUOTE_AGE_MS = 30 * 60_000;
 
+type DatabaseTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
+
+async function resolveConfiguredOutcome(
+  tx: DatabaseTransaction,
+  observation: MarketQuoteObservation,
+) {
+  await tx.execute(
+    sql`SELECT id FROM configured_sources WHERE id = ${observation.provenance.sourceId} FOR SHARE`,
+  );
+  const [source] = await tx
+    .select({ enabled: configuredSources.enabled, family: providers.family })
+    .from(configuredSources)
+    .innerJoin(providers, eq(providers.id, configuredSources.providerId))
+    .where(eq(configuredSources.id, observation.provenance.sourceId));
+  if (!source?.enabled || source.family !== "markets")
+    throw new Error("Market source is not enabled");
+  const [contract] = await tx
+    .select({ id: marketContracts.id })
+    .from(marketContracts)
+    .where(
+      and(
+        eq(marketContracts.sourceId, observation.provenance.sourceId),
+        eq(marketContracts.externalId, observation.marketId),
+      ),
+    );
+  if (!contract) throw new Error("Market contract is not configured");
+  const [outcome] = await tx
+    .select({ id: marketOutcomes.id })
+    .from(marketOutcomes)
+    .where(
+      and(
+        eq(marketOutcomes.sourceId, observation.provenance.sourceId),
+        eq(marketOutcomes.contractId, contract.id),
+        eq(marketOutcomes.externalId, observation.outcomeId),
+      ),
+    );
+  if (!outcome) throw new Error("Market outcome is not configured");
+  return outcome.id;
+}
+
+function quoteValues(
+  observation: MarketQuoteObservation,
+  outcomeId: string,
+  sourceObservedAt: Date,
+  acquiredAt: Date,
+) {
+  const price = observation.price;
+  return {
+    outcomeId,
+    sourceId: observation.provenance.sourceId,
+    snapshotId: observation.snapshotId,
+    sourceRevision: observation.provenance.sourceRevision,
+    contentHash: observation.provenance.contentHash,
+    sourceUrl: observation.provenance.sourceUrl,
+    priceType: price.kind,
+    bid: price.kind === "bid_ask_midpoint" ? String(price.bid) : null,
+    ask: price.kind === "bid_ask_midpoint" ? String(price.ask) : null,
+    midpoint: price.kind === "bid_ask_midpoint" ? String(price.midpoint) : null,
+    spread: price.kind === "bid_ask_midpoint" ? String(price.spread) : null,
+    lastTrade: price.kind === "last_trade" ? String(price.price) : null,
+    comparisonStatus:
+      price.kind === "bid_ask_midpoint" ? price.comparisonStatus : null,
+    exclusionReason:
+      price.kind === "bid_ask_midpoint" ? price.exclusionReason : null,
+    expectedPriceType:
+      price.kind === "unavailable" ? price.expectedPriceType : null,
+    unavailableReason: price.kind === "unavailable" ? price.reason : null,
+    sourceObservedAt,
+    declaredPublicationKind:
+      observation.provenance.declaredPublication?.kind ?? null,
+    declaredPublicationDate:
+      observation.provenance.declaredPublication?.kind === "date"
+        ? observation.provenance.declaredPublication.date
+        : null,
+    declaredPublicationAt:
+      observation.provenance.declaredPublication?.kind === "instant"
+        ? new Date(observation.provenance.declaredPublication.at)
+        : null,
+    acquiredAt,
+    qualityPolicyVersion: observation.qualityPolicyVersion,
+    qualityState:
+      price.kind === "bid_ask_midpoint" ? price.comparisonStatus : price.kind,
+    parserVersion: observation.provenance.parserVersion,
+    transformVersion: observation.provenance.transformationVersion,
+    ingestionRunId: observation.provenance.ingestionRunId,
+  };
+}
+
 /** Persists only a preconfigured contract/outcome. No market discovery or collection activation. */
 export async function recordMarketQuote(
   db: Database,
@@ -53,40 +143,10 @@ export async function recordMarketQuote(
   )
     throw new Error("Market quote has ineligible provider time");
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT id FROM configured_sources WHERE id = ${observation.provenance.sourceId} FOR SHARE`,
-    );
-    const [source] = await tx
-      .select({ enabled: configuredSources.enabled, family: providers.family })
-      .from(configuredSources)
-      .innerJoin(providers, eq(providers.id, configuredSources.providerId))
-      .where(eq(configuredSources.id, observation.provenance.sourceId));
-    if (!source?.enabled || source.family !== "markets")
-      throw new Error("Market source is not enabled");
-    const [contract] = await tx
-      .select({ id: marketContracts.id })
-      .from(marketContracts)
-      .where(
-        and(
-          eq(marketContracts.sourceId, observation.provenance.sourceId),
-          eq(marketContracts.externalId, observation.marketId),
-        ),
-      );
-    if (!contract) throw new Error("Market contract is not configured");
-    const [outcome] = await tx
-      .select({ id: marketOutcomes.id })
-      .from(marketOutcomes)
-      .where(
-        and(
-          eq(marketOutcomes.sourceId, observation.provenance.sourceId),
-          eq(marketOutcomes.contractId, contract.id),
-          eq(marketOutcomes.externalId, observation.outcomeId),
-        ),
-      );
-    if (!outcome) throw new Error("Market outcome is not configured");
+    const outcomeId = await resolveConfiguredOutcome(tx, observation);
     const duplicateWhere = and(
       eq(marketQuotes.sourceId, observation.provenance.sourceId),
-      eq(marketQuotes.outcomeId, outcome.id),
+      eq(marketQuotes.outcomeId, outcomeId),
       eq(marketQuotes.snapshotId, observation.snapshotId),
       observation.provenance.sourceRevision === null
         ? isNull(marketQuotes.sourceRevision)
@@ -105,51 +165,9 @@ export async function recordMarketQuote(
         throw new Error("Conflicting market quote for same snapshot revision");
       return { quoteId: existing.id, inserted: false };
     }
-    const price = observation.price;
     const [inserted] = await tx
       .insert(marketQuotes)
-      .values({
-        outcomeId: outcome.id,
-        sourceId: observation.provenance.sourceId,
-        snapshotId: observation.snapshotId,
-        sourceRevision: observation.provenance.sourceRevision,
-        contentHash: observation.provenance.contentHash,
-        sourceUrl: observation.provenance.sourceUrl,
-        priceType: price.kind,
-        bid: price.kind === "bid_ask_midpoint" ? String(price.bid) : null,
-        ask: price.kind === "bid_ask_midpoint" ? String(price.ask) : null,
-        midpoint:
-          price.kind === "bid_ask_midpoint" ? String(price.midpoint) : null,
-        spread: price.kind === "bid_ask_midpoint" ? String(price.spread) : null,
-        lastTrade: price.kind === "last_trade" ? String(price.price) : null,
-        comparisonStatus:
-          price.kind === "bid_ask_midpoint" ? price.comparisonStatus : null,
-        exclusionReason:
-          price.kind === "bid_ask_midpoint" ? price.exclusionReason : null,
-        expectedPriceType:
-          price.kind === "unavailable" ? price.expectedPriceType : null,
-        unavailableReason: price.kind === "unavailable" ? price.reason : null,
-        sourceObservedAt,
-        declaredPublicationKind:
-          observation.provenance.declaredPublication?.kind ?? null,
-        declaredPublicationDate:
-          observation.provenance.declaredPublication?.kind === "date"
-            ? observation.provenance.declaredPublication.date
-            : null,
-        declaredPublicationAt:
-          observation.provenance.declaredPublication?.kind === "instant"
-            ? new Date(observation.provenance.declaredPublication.at)
-            : null,
-        acquiredAt,
-        qualityPolicyVersion: observation.qualityPolicyVersion,
-        qualityState:
-          price.kind === "bid_ask_midpoint"
-            ? price.comparisonStatus
-            : price.kind,
-        parserVersion: observation.provenance.parserVersion,
-        transformVersion: observation.provenance.transformationVersion,
-        ingestionRunId: observation.provenance.ingestionRunId,
-      })
+      .values(quoteValues(observation, outcomeId, sourceObservedAt, acquiredAt))
       .onConflictDoNothing()
       .returning({ id: marketQuotes.id });
     if (!inserted) {
