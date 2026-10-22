@@ -11,6 +11,34 @@ const jobSchema = z.strictObject({
   snapshot: z.unknown(),
   iterations: z.number().int().min(100).max(20_000),
 });
+const safeOutputSchema = z.discriminatedUnion("code", [
+  z.strictObject({
+    code: z.literal("completed"),
+    runId: z.uuid(),
+    publicationId: z.uuid().nullable(),
+    repeated: z.boolean(),
+  }),
+  z.strictObject({ code: z.literal("budget") }),
+  z.strictObject({ code: z.literal("schema") }),
+  z.strictObject({ code: z.literal("model_or_database_error") }),
+]);
+
+function queueClient(connectionString: string, schema = QUEUE_SCHEMA): PgBoss {
+  const boss = new PgBoss({
+    connectionString,
+    schema,
+    migrate: false,
+    createSchema: false,
+    max: 1,
+    schedule: false,
+    supervise: false,
+    persistQueueStats: false,
+  });
+  boss.on("error", () => {
+    /* The CLI reports only a generic failure, never connection details. */
+  });
+  return boss;
+}
 
 /** A separate bounded worker consumer shares the installed pg-boss schema. */
 export async function registerModelWorker(db: Database, boss: PgBoss) {
@@ -38,8 +66,19 @@ export async function registerModelWorker(db: Database, boss: PgBoss) {
           return [
             { id: job.id, status: "deadletter", output: { code: "schema" } },
           ];
-        await runBaselineModel(db, parsed.data);
-        return [{ id: job.id, status: "completed" }];
+        const result = await runBaselineModel(db, parsed.data);
+        return [
+          {
+            id: job.id,
+            status: "completed",
+            output: {
+              code: "completed",
+              runId: result.run.runId,
+              publicationId: result.publicationId,
+              repeated: result.repeated,
+            },
+          },
+        ];
       } catch (error) {
         const code =
           error instanceof z.ZodError ? "schema" : "model_or_database_error";
@@ -59,33 +98,48 @@ export async function registerModelWorker(db: Database, boss: PgBoss) {
 export async function enqueueModelJob(connectionString: string, raw: unknown) {
   const input = jobSchema.parse(raw);
   const snapshot = parseModelSnapshot(input.snapshot);
+  const data = { snapshot, iterations: input.iterations };
   if (
-    Buffer.byteLength(JSON.stringify(snapshot), "utf8") > maxPayloadBytes ||
+    Buffer.byteLength(JSON.stringify(data), "utf8") > maxPayloadBytes ||
     input.iterations * snapshot.races.length > 5_000_000
   )
     throw new Error("Model request exceeds worker budget");
-  const boss = new PgBoss({
-    connectionString,
-    schema: QUEUE_SCHEMA,
-    migrate: false,
-    createSchema: false,
-    max: 1,
-    schedule: false,
-    supervise: false,
-    persistQueueStats: false,
-  });
-  boss.on("error", () => {
-    /* Report only a generic CLI failure. */
-  });
+  const boss = queueClient(connectionString);
   try {
     await boss.start({ attempts: 2 });
-    const jobId = await boss.send(
-      MODEL_QUEUE,
-      { snapshot, iterations: input.iterations },
-      { singletonKey: `${await snapshotDigest(snapshot)}:${input.iterations}` },
-    );
+    const jobId = await boss.send(MODEL_QUEUE, data, {
+      singletonKey: `${await snapshotDigest(snapshot)}:${input.iterations}`,
+    });
     if (!jobId) throw new Error("Model queue did not accept request");
     return jobId;
+  } finally {
+    await boss.stop({ graceful: true, timeout: 10_000 });
+  }
+}
+
+/** Safe, read-only job metadata for local diagnostics. Never returns job.data. */
+export async function readModelJobStatus(
+  connectionString: string,
+  jobId: string,
+  schema = QUEUE_SCHEMA,
+) {
+  z.uuid().parse(jobId);
+  const boss = queueClient(connectionString, schema);
+  try {
+    await boss.start({ attempts: 2 });
+    const job = await boss.getJobById(MODEL_QUEUE, jobId);
+    if (!job) return null;
+    const safeOutput = safeOutputSchema.safeParse(job.output);
+    return {
+      id: job.id,
+      state: job.state,
+      retryCount: job.retryCount,
+      createdAt: job.createdOn.toISOString(),
+      startAfter: job.startAfter.toISOString(),
+      startedAt: job.startedOn?.toISOString() ?? null,
+      completedAt: job.completedOn?.toISOString() ?? null,
+      output: safeOutput.success ? safeOutput.data : { code: null },
+    };
   } finally {
     await boss.stop({ graceful: true, timeout: 10_000 });
   }

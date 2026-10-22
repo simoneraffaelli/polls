@@ -10,6 +10,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       PGHOST: 127.0.0.1
       PGPORT: "5432"

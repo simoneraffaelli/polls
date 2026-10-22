@@ -28,6 +28,8 @@ Il codice e il database distinguono materiale acquisito, revisioni, run sperimen
 
 Gli errori applicativi devono riportare codici e identità dei run, non password, URL di connessione o payload riservati. La disponibilità del container non prova la freschezza delle osservazioni. Un sistema di monitoraggio esterno potrà controllare readiness e raggiungibilità quando verrà scelto; non è configurato da questa consegna.
 
+Per un calcolo del modello accodato, impostare `MODEL_JOB_ID` nell'ambiente del processo e usare `pnpm model:status` con le credenziali runtime. La risposta riporta stato, retry, tempi e codice di esito; al completamento collega il job al run e all'eventuale pubblicazione. Non stampa lo snapshot. L'assenza del job può dipendere anche dalla conservazione limitata della coda: i run persistenti si consultano nell'amministrazione. Dettagli in [MODEL_OPERATIONS.md](MODEL_OPERATIONS.md).
+
 ## Carico e ripristino
 
 `node scripts/operations/load-check.mjs` esegue al massimo 100 richieste e 4 in parallelo per impostazione predefinita, contro localhost. `LOAD_BASE_URL`, `LOAD_REQUESTS` (massimo 1000) e `LOAD_CONCURRENCY` (massimo 16) scelgono esplicitamente il profilo; durata massima circa un minuto e timeout per richiesta di 5 secondi. Il rapporto misura latenza agli header, errori e richieste effettive: non è una prova completa del caricamento della pagina.

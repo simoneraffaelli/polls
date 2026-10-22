@@ -6,7 +6,10 @@ import {
   MODEL_QUEUE,
   startCollectionQueue,
 } from "../../src/infrastructure/jobs/collection-queue";
-import { registerModelWorker } from "../../src/infrastructure/jobs/model-queue";
+import {
+  readModelJobStatus,
+  registerModelWorker,
+} from "../../src/infrastructure/jobs/model-queue";
 import { createIsolatedDatabase, type IsolatedDatabase } from "./harness";
 
 describe.skipIf(!process.env.TEST_DATABASE_URL)(
@@ -50,6 +53,18 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         if (job?.state === "failed") {
           expect(job.output).toMatchObject({ code: "schema" });
           expect(job.retryCount).toBe(0);
+          const status = await readModelJobStatus(
+            connectionString,
+            jobId!,
+            queueSchema,
+          );
+          expect(status).toMatchObject({
+            id: jobId,
+            state: "failed",
+            retryCount: 0,
+            output: { code: "schema" },
+          });
+          expect(JSON.stringify(status)).not.toContain("snapshot");
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, 200));

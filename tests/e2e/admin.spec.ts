@@ -37,6 +37,7 @@ test("authorizes only current administrators for import and respects revocation"
   await page.getByLabel("Email").fill(email!);
   await page.getByLabel("Password").fill(password!);
   await page.getByRole("button", { name: "Accedi" }).click();
+  await expect(page).toHaveURL(/^http:\/\/127\.0\.0\.1:3100\/admin\/?$/);
   await expect(
     page.getByRole("heading", { name: "Amministrazione", level: 1 }),
   ).toBeVisible();
