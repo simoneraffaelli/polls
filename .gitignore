@@ -1,0 +1,30 @@
+# Dependencies and application output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime data and diagnostics
+data/
+backups/
+logs/
+*.log
+*.dump
+
+# Local tooling and operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
