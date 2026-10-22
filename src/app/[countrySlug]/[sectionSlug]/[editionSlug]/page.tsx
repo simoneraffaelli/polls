@@ -281,8 +281,8 @@ export default async function EditionPage({ params, searchParams }: Props) {
           Scenari
         </h2>
         <p className="section-intro">
-          Uno scenario richiede un run pubblicato e il suo snapshot sigillato.
-          Al momento non è disponibile una base verificata.
+          Gli scenari partono da un run pubblicato e dal suo snapshot sigillato.
+          Mantengono lo stato sperimentale o storico della base selezionata.
         </p>
         <Link
           className="page-link"

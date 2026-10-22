@@ -26,6 +26,12 @@ test("shows the published forecast, uncertainty and actual publication history",
   await expect(
     forecast.getByText(/Maggioranza dei seggi: A:.*probabilità del modello/),
   ).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
 });
 
 test("calculates a bounded personal scenario without changing the published run", async ({

@@ -162,6 +162,42 @@ test("authorizes only current administrators for import and respects revocation"
     });
     expect(commitResponse.status()).toBe(200);
     expect(await commitResponse.json()).toMatchObject({ saved: 1 });
+    const pollsResponse = await page.request.get("/api/admin/polls");
+    expect(pollsResponse.status()).toBe(200);
+    const pollPage = (await pollsResponse.json()) as {
+      items: {
+        link_id: string;
+        poll_id: string;
+        edition_id: string;
+        race_id: string | null;
+        external_id: string;
+      }[];
+    };
+    const importedLink = pollPage.items.find(
+      (item) => item.external_id === externalId,
+    );
+    expect(importedLink).toBeDefined();
+    expect(importedLink).toMatchObject({
+      edition_id: payload.editionId,
+      race_id: null,
+    });
+    const unchangedAssociation = await page.request.post("/api/admin/polls", {
+      headers,
+      data: {
+        action: "poll.reassociate",
+        scope: { sectionId: payload.sectionId, editionId: payload.editionId },
+        pollId: importedLink!.poll_id,
+        oldLinkId: importedLink!.link_id,
+        raceId: null,
+        reason: "CI unchanged association",
+      },
+    });
+    expect(unchangedAssociation.status()).toBe(409);
+    const malformedPollCommand = await page.request.post("/api/admin/polls", {
+      headers,
+      data: '{"action":',
+    });
+    expect(malformedPollCommand.status()).toBe(400);
     await page.goto("/usa/midterms/2026/polls");
     await expect(page.getByText("CI test pollster")).toBeVisible();
 

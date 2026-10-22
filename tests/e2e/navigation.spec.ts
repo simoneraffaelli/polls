@@ -61,7 +61,7 @@ test("navigates the registered hierarchy and explains unavailable data", async (
   await expect(
     page.getByText(
       process.env.E2E_SCENARIO_ID
-        ? /Scenario di prova CI/
+        ? /Maggioranza dei seggi/
         : process.env.PGDATABASE
           ? /Nessun run di modello sigillato/
           : /Archivio non configurato/,
