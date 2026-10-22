@@ -1,0 +1,15 @@
+{
+  "market": "synthetic-condition-1",
+  "asset_id": "synthetic-token-yes-1",
+  "timestamp": "1792670400",
+  "hash": "synthetic-book-hash-1",
+  "bids": [
+    { "price": "0.44", "size": "200" },
+    { "price": "0.45", "size": "100" }
+  ],
+  "asks": [
+    { "price": "0.47", "size": "250" },
+    { "price": "0.46", "size": "150" }
+  ],
+  "last_trade_price": "0.99"
+}

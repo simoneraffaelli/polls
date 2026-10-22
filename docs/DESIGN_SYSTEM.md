@@ -1,0 +1,9 @@
+# Sistema grafico
+
+L'interfaccia pubblica usa un fondo caldo, testo quasi nero, separatori netti e una griglia che si adatta al telefono. I token sono in `src/app/globals.css`; il carattere è di sistema, con Georgia per i titoli e cifre importanti. Non vengono scaricati font o asset esterni. Il verde segnala la gerarchia editoriale, non un partito o un esito.
+
+Il catalogo registra le sole pagine esistenti e costruisce URL, navigazione e breadcrumb. Le viste dell'edizione sono registrate per ID di edizione: un percorso sconosciuto restituisce 404. Le pagine Midterms espongono panoramica, Camera, Senato, sondaggi, notizie e fonti/metodo. Ogni vista dice quali dati servono e quale parte manca, senza numeri dimostrativi pubblici.
+
+I componenti comuni ricevono modelli di presentazione in `src/platform/presentation/models.ts`. `Availability<T>` distingue dato pronto, vuoto, caricamento ed errore. `MetricKind` distingue intenzione di voto, probabilità del modello, prezzo di mercato, seggi e notizie; testo e unità devono essere preparati dall'applicazione prima del rendering. Tabelle e liste conservano fonte e tempo di acquisizione. La lista notizie mostra l'estratto solo quando il riuso è consentito; titolo e attribuzione restano visibili. I grafici Recharts mostrano una tabella testuale dei valori dentro un pannello espandibile. Le componenti di stato non sostituiscono un dato mancante con zero.
+
+La navigazione offre uno skip link, focus visibile, etichette testuali degli stati e tabella scorribile da tastiera. La barra delle viste resta scorribile su schermi piccoli. Le rotte pubbliche mantengono `noindex` finché la copertura e la pubblicazione non sono verificate. L'integrazione dei dati reali, i filtri e la paginazione appartengono alla fase successiva: non vengono esposti controlli senza risultati da filtrare.

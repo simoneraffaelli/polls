@@ -1,0 +1,320 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  catalog,
+  canonicalUrl,
+  editionNavigation,
+  midtermsPollHistoryPath,
+  midtermsScenariosPath,
+} from "@/composition/catalog";
+import {
+  parsePublicAsOf,
+  publicPollFreshnessMinutes,
+  readPublicArticles,
+  readPublicForecastCards,
+  readPublicPolls,
+  readPublicSources,
+} from "@/composition/observatory";
+import {
+  freshnessFromSources,
+  newsItems,
+  pollRows,
+} from "@/platform/presentation/observatory";
+import { Breadcrumbs } from "@/ui/patterns/breadcrumbs";
+import { EditionNavigation } from "@/ui/patterns/edition-navigation";
+import { FreshnessBadge } from "@/ui/patterns/freshness-badge";
+import { MetricCard } from "@/ui/patterns/metric-card";
+import { PollTable } from "@/ui/patterns/poll-table";
+import { NewsList } from "@/ui/patterns/news-list";
+import { SourceList } from "@/ui/patterns/source-list";
+import { DataNotice } from "@/ui/patterns/data-notice";
+import { PublishedForecastList } from "@/ui/patterns/published-forecast";
+
+type Route = { countrySlug: string; sectionSlug: string; editionSlug: string };
+type Props = {
+  params: Promise<Route>;
+  searchParams: Promise<{ asOf?: string | string[] }>;
+};
+const scope = {
+  sectionId: "section:us:midterms",
+  editionId: "edition:us:midterms:2026",
+} as const;
+
+type Section = NonNullable<ReturnType<typeof catalog.sectionBySlugs>>;
+type Edition = NonNullable<ReturnType<typeof catalog.editionBySlugs>>;
+
+function OverviewMetrics({
+  polls,
+  forecasts,
+  section,
+  edition,
+}: {
+  polls: Awaited<ReturnType<typeof readPublicPolls>>;
+  forecasts: Awaited<ReturnType<typeof readPublicForecastCards>>;
+  section: Section;
+  edition: Edition;
+}) {
+  const includedPolls =
+    polls.status === "ready"
+      ? polls.value.items.filter((poll) => poll.currentLinkIncluded).length
+      : 0;
+  return (
+    <section className="content-section" aria-labelledby="edition-metrics">
+      <h2 className="section-heading" id="edition-metrics">
+        Dati e significati
+      </h2>
+      <div className="metric-grid">
+        <MetricCard
+          title="Sondaggi acquisiti"
+          state={
+            polls.status === "ready" && includedPolls > 0
+              ? {
+                  status: "ready",
+                  value: {
+                    kind: "vote_intention",
+                    label: "Studi nella prima pagina",
+                    valueText: String(includedPolls),
+                    detail: "Non sono probabilità di vittoria",
+                  },
+                }
+              : {
+                  status: polls.status === "error" ? "error" : "empty",
+                  message:
+                    polls.status === "ready"
+                      ? "Nessun sondaggio attualmente incluso nella prima pagina."
+                      : polls.message,
+                }
+          }
+        />
+        <section className="metric-card" aria-label="Previsioni pubblicate">
+          <h3>Previsioni pubblicate</h3>
+          {forecasts.status === "ready" ? (
+            <>
+              <p>
+                {forecasts.value.length > 0
+                  ? `${forecasts.value.length} domande con un run sigillato e pubblicato.`
+                  : "Nessun run sigillato e pubblicato per questa edizione."}
+              </p>
+              <p>
+                Stato corrente delle pubblicazioni, distinto dal filtro
+                temporale dei sondaggi.
+              </p>
+              <Link href={midtermsScenariosPath(section, edition)}>
+                Consulta run e scenari
+              </Link>
+            </>
+          ) : (
+            <DataNotice
+              state={{
+                status: forecasts.status === "error" ? "error" : "empty",
+                message: forecasts.message,
+              }}
+            />
+          )}
+        </section>
+        <MetricCard
+          title="Prezzi di mercato"
+          state={{
+            status: "empty",
+            message:
+              "Nessun mercato associato a una domanda equivalente e autorizzato alla visualizzazione.",
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { countrySlug, sectionSlug, editionSlug } = await params;
+  const section = catalog.sectionBySlugs(countrySlug, sectionSlug);
+  const edition = catalog.editionBySlugs(countrySlug, sectionSlug, editionSlug);
+  if (!section || !edition) notFound();
+  return {
+    title: `${section.name} ${edition.name}`,
+    description: edition.description,
+    alternates: {
+      canonical: canonicalUrl(catalog.editionPath(section, edition)),
+    },
+  };
+}
+
+export default async function EditionPage({ params, searchParams }: Props) {
+  const { countrySlug, sectionSlug, editionSlug } = await params;
+  const query = await searchParams;
+  const country = catalog.countryBySlug(countrySlug);
+  const section = catalog.sectionBySlugs(countrySlug, sectionSlug);
+  const edition = catalog.editionBySlugs(countrySlug, sectionSlug, editionSlug);
+  if (
+    !country ||
+    !section ||
+    !edition ||
+    section.id !== scope.sectionId ||
+    edition.id !== scope.editionId
+  )
+    notFound();
+  const asOf = parsePublicAsOf(
+    typeof query.asOf === "string" ? query.asOf : undefined,
+  );
+  if (!asOf) notFound();
+  const [polls, articles, sources, forecasts] = await Promise.all([
+    readPublicPolls({
+      scope,
+      asOf,
+      limit: 5,
+      staleAfterMinutes: publicPollFreshnessMinutes,
+    }),
+    readPublicArticles(scope, asOf, 0, 5),
+    readPublicSources(scope, asOf),
+    readPublicForecastCards(scope),
+  ]);
+  const freshness =
+    sources.status === "ready"
+      ? freshnessFromSources(sources.value.items)
+      : {
+          state:
+            sources.status === "error"
+              ? ("error" as const)
+              : ("unavailable" as const),
+          acquiredAt: null,
+        };
+  const view = (id: string) =>
+    catalog.viewsForEdition(section, edition).find((item) => item.id === id)!;
+  return (
+    <>
+      <Breadcrumbs items={catalog.breadcrumbs(country, section, edition)} />
+      <div className="hero">
+        <span className="eyebrow">Edizione · {country.name}</span>
+        <h1>
+          {section.name} {edition.name}
+        </h1>
+        <p>{edition.description}</p>
+      </div>
+      <EditionNavigation
+        items={editionNavigation(section, edition)}
+        currentPath={catalog.editionPath(section, edition)}
+      />
+      <div className="status-line">
+        <span className="eyebrow">Stato dell’osservatorio</span>
+        <FreshnessBadge freshness={freshness} />
+      </div>
+      <OverviewMetrics
+        polls={polls}
+        forecasts={forecasts}
+        section={section}
+        edition={edition}
+      />
+      <section
+        className="content-section"
+        aria-labelledby="published-forecast-title"
+      >
+        <h2 className="section-heading" id="published-forecast-title">
+          Previsioni pubblicate
+        </h2>
+        <PublishedForecastList
+          state={
+            forecasts.status === "ready"
+              ? { status: "ready", value: forecasts.value }
+              : {
+                  status: forecasts.status === "error" ? "error" : "empty",
+                  message: forecasts.message,
+                }
+          }
+          scenarioPath={midtermsScenariosPath(section, edition)}
+        />
+      </section>
+      <section className="content-section" aria-labelledby="overview-polls">
+        <h2 className="section-heading" id="overview-polls">
+          Ultimi sondaggi
+        </h2>
+        <PollTable
+          state={
+            polls.status === "ready"
+              ? {
+                  status: "ready",
+                  value: pollRows(
+                    polls.value.items,
+                    (id) =>
+                      `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
+                  ),
+                }
+              : {
+                  status: polls.status === "error" ? "error" : "empty",
+                  message: polls.message,
+                }
+          }
+        />
+        <p>
+          <Link
+            className="page-link"
+            href={catalog.viewPath(
+              section,
+              edition,
+              view("view:us:midterms:2026:polls"),
+            )}
+          >
+            Consulta e filtra i sondaggi
+          </Link>
+        </p>
+      </section>
+      <section className="content-section" aria-labelledby="overview-news">
+        <h2 className="section-heading" id="overview-news">
+          Documenti istituzionali
+        </h2>
+        <NewsList
+          state={
+            articles.status === "ready"
+              ? { status: "ready", value: newsItems(articles.value.items) }
+              : {
+                  status: articles.status === "error" ? "error" : "empty",
+                  message: articles.message,
+                }
+          }
+        />
+        <p>
+          <Link
+            className="page-link"
+            href={catalog.viewPath(
+              section,
+              edition,
+              view("view:us:midterms:2026:news"),
+            )}
+          >
+            Consulta i documenti
+          </Link>
+        </p>
+      </section>
+      <section className="content-section" aria-labelledby="overview-sources">
+        <h2 className="section-heading" id="overview-sources">
+          Fonti associate
+        </h2>
+        {sources.status === "ready" ? (
+          <SourceList items={sources.value.items} />
+        ) : (
+          <DataNotice
+            state={{
+              status: sources.status === "error" ? "error" : "empty",
+              message: sources.message,
+            }}
+          />
+        )}
+      </section>
+      <section className="content-section" aria-labelledby="overview-scenarios">
+        <h2 className="section-heading" id="overview-scenarios">
+          Scenari
+        </h2>
+        <p className="section-intro">
+          Gli scenari partono da un run pubblicato e dal suo snapshot sigillato.
+          Mantengono lo stato sperimentale o storico della base selezionata.
+        </p>
+        <Link
+          className="page-link"
+          href={midtermsScenariosPath(section, edition)}
+        >
+          Stato degli scenari
+        </Link>
+      </section>
+    </>
+  );
+}
