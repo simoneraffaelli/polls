@@ -1,41 +1,99 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-database: &database
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGDATABASE: polls
+  PGUSER: polls_app
+  PGPASSWORD: ${APP_DATABASE_PASSWORD:?set a distinct runtime password}
+
 services:
   web:
     build:
       context: .
       target: web
     restart: unless-stopped
+    init: true
     environment:
+      <<: *database
       NODE_ENV: production
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set the public origin}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set a random secret}
     ports:
       - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    mem_limit: 768m
+    cpus: 1.5
+    pids_limit: 128
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
 
   worker:
     build:
       context: .
       target: worker
     restart: unless-stopped
+    init: true
     environment:
+      <<: *database
       NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 128
+    stop_grace_period: 40s
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    restart: "no"
+    environment:
       PGHOST: postgres
       PGPORT: "5432"
       PGDATABASE: polls
-      PGUSER: polls
-      PGPASSWORD: ${POSTGRES_PASSWORD:?creare file .env}
+      PGUSER: polls_owner
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set the owner password}
+      APP_DATABASE_PASSWORD: ${APP_DATABASE_PASSWORD:?set a distinct runtime password}
     depends_on:
       postgres:
         condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
 
   postgres:
     image: postgres:17.11-bookworm
     restart: unless-stopped
     environment:
       POSTGRES_DB: polls
-      POSTGRES_USER: polls
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?creare file .env}
+      POSTGRES_USER: polls_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set the owner password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    mem_limit: 768m
+    cpus: 1.0
+    shm_size: 128mb
+    logging: *logging
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U polls -d polls"]
+      test: ["CMD-SHELL", "pg_isready -U polls_owner -d polls"]
       interval: 10s
       timeout: 5s
       retries: 5

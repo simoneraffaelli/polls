@@ -32,3 +32,7 @@ COPY --chown=node:node --from=production-dependencies /app/node_modules ./node_m
 COPY --chown=node:node --from=build /app/dist-worker ./dist-worker
 USER node
 CMD ["node", "dist-worker/worker/index.js"]
+
+FROM worker AS migrate
+COPY --chown=node:node --from=build /app/drizzle ./drizzle
+CMD ["node", "dist-worker/worker/migrate.js"]

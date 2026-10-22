@@ -26,7 +26,7 @@ La copertura di VoteHub per singole gare e archivi storici non è ancora dimostr
 
 ## Stato e documentazione
 
-Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senato, sondaggi, notizie e metodo, in italiano e con stati espliciti di assenza dati. Gli adapter verificati e il catalogo strutturale delle 470 gare sono pronti per il collegamento alla persistenza. **Nessuna fonte è attiva, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
+Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senato, sondaggi, notizie e metodo, in italiano. Le pagine leggono l'archivio PostgreSQL con provenienza, filtri, paginazione e stati espliciti di assenza o errore. Il catalogo strutturale comprende 470 gare; l'amministrazione consente gestione delle fonti e import controllato. **Nessuna fonte è stata attivata in produzione, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
 
 - [Piano di implementazione](docs/IMPLEMENTATION_PLAN.md): architettura, fasi, criteri di completamento, fonti, verifiche, costi e distribuzione.
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
@@ -39,6 +39,10 @@ Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senat
 - [Audit del riferimento](docs/REFERENCE_AUDIT.md): inventario del materiale esterno, consultato senza eseguirlo.
 - [Regole Midterms 2026](docs/MIDTERMS_RULES.md): seggi, calendario, caucus e limiti da mantenere espliciti nel catalogo e nel modello.
 - [Dataset storici](docs/HISTORICAL_DATA.md): fonti riusabili e limiti per la valutazione retrospettiva.
+- [Amministrazione](docs/ADMIN.md): account predisposti, autorizzazioni, import e audit.
+- [Metodologia sperimentale](docs/FORECAST_METHODOLOGY.md) e [valutazione](docs/FORECAST_EVALUATION.md): regole, criteri e limiti delle evidenze.
+- [Distribuzione](docs/DEPLOYMENT.md), [backup e ripristino](docs/BACKUP_RESTORE.md), [runbook](docs/RUNBOOK.md): preparazione del rilascio e controlli da eseguire sul server.
+- [Aggiungere una sezione](docs/ADDING_A_SECTION.md): estensioni senza collisioni fra paesi.
 
 La fase 0 resta aperta sulle verifiche dei provider e dell'ambiente di destinazione. Le fondazioni locali procedono per le parti indipendenti da quelle verifiche; il dettaglio dei controlli ancora necessari è nel documento di avanzamento.
 
@@ -97,7 +101,7 @@ La configurazione Compose è destinata allo sviluppo e al collaudo locale, non �
 docker compose up --build
 ```
 
-Solo il web pubblica una porta sull'interfaccia locale `127.0.0.1:3000`; PostgreSQL resta nella rete dei container con un volume persistente. Il worker ha una build distinta e si collega al database e alla coda già predisposti; il registro delle fonti iniziale è vuoto. Nell'immagine worker l'installazione esplicita della coda usa `node dist-worker/worker/install-queue.js`, dopo le migrazioni. L'orchestrazione Compose del rilascio sarà completata nella fase operativa. Fuori da Compose sono disponibili `pnpm worker:build` e `pnpm worker:start`, con la configurazione richiesta dal worker fornita nell'ambiente del processo.
+Solo il web pubblica una porta sull'interfaccia locale `127.0.0.1:3000`; PostgreSQL resta nella rete dei container con un volume persistente. Il servizio temporaneo `migrate` applica schema, coda e permessi runtime prima dell'avvio di web e worker. Le credenziali del proprietario del database rimangono separate da quelle applicative. Il seed si esegue esplicitamente con `node dist-worker/composition/seed-cli.js` nell'immagine worker: crea catalogo e fonti disabilitate senza riattivare quelle sospese. Fuori da Compose sono disponibili `pnpm worker:build` e `pnpm worker:start`, con la configurazione richiesta dal worker fornita nell'ambiente del processo.
 
 | Variabile worker | Significato |
 |---|---|
@@ -107,6 +111,6 @@ Solo il web pubblica una porta sull'interfaccia locale `127.0.0.1:3000`; Postgre
 | `PGUSER` | Utente database |
 | `PGPASSWORD` | Password; non viene stampata nei log |
 
-Compose fornisce questi valori al worker e usa `POSTGRES_PASSWORD` dal file `.env` locale. Il worker avviato direttamente legge l'ambiente del processo e non carica automaticamente `.env`; user e password vengono codificati quando si costruisce l'URL di connessione.
+Compose fornisce questi valori a web e worker usando `APP_DATABASE_PASSWORD`; `POSTGRES_PASSWORD` è riservata al proprietario e alle migrazioni. L'amministrazione richiede inoltre `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL`. I processi avviati direttamente leggono l'ambiente e non caricano automaticamente `.env`; user e password vengono codificati quando si costruisce l'URL di connessione.
 
 La distribuzione futura prevede Coolify collegato tramite GitHub App e webhook, con branch di rilascio esplicito e verifiche prima dell'apertura pubblica. Il VPS dichiarato dispone di 4 vCore, 4 GB RAM e 120 GB NVMe; margine disponibile, luogo della build e backup esterni restano da verificare.

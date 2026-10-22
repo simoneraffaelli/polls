@@ -44,3 +44,17 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: polls-ci
+      POSTGRES_PASSWORD: ci_only_owner_password_123
+      APP_DATABASE_PASSWORD: ci_only_runtime_password_456
+      BETTER_AUTH_SECRET: ci_only_auth_secret_at_least_32_characters
+      BETTER_AUTH_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/operations/backup.sh scripts/operations/restore-check.sh scripts/operations/ci-smoke.sh
+      - run: bash scripts/operations/ci-smoke.sh
