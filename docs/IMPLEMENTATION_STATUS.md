@@ -32,7 +32,8 @@ I blocchi non costituiscono nuove autorizzazioni al rilascio. La fase 5 può pro
 - **2 test Playwright superati** contro l'avvio standalone: navigazione, stato senza dati, breadcrumb, URL canonico, `noindex` e rotte escluse. L'esecuzione fuori dalla sandbox ha consentito le connessioni locali bloccate nell'ambiente ristretto.
 - Collaudo visivo di homepage ed edizione 2026 a 1280 e 390 pixel: nessun overflow orizzontale o errore JavaScript di pagina; skip link visibile al primo Tab e funzionante con Invio. Screenshot locali esaminati, esclusi da Git.
 - Avvio del worker con configurazione invalida verificato: uscita con codice 1 e messaggio generico senza password. Collegamenti interni della documentazione e controllo whitespace Git superati.
-- Dockerfile, Compose e workflow CI sono predisposti; la verifica locale non certifica ancora l'esecuzione dei container o il risultato della CI remota. PostgreSQL non è stato avviato né usato dai test di questo incremento.
+- **CI Linux superata** sul commit applicativo `ce0e7ca`: installazione da clone pulito con lockfile, typecheck, lint, formattazione, 14 test, build worker/web e 2 test browser. [Esecuzione GitHub Actions](https://github.com/simoneraffaelli/polls/actions/runs/39754611289).
+- Dockerfile e Compose sono predisposti, ma i container non sono ancora stati eseguiti. PostgreSQL non è stato avviato né usato dai test di questo incremento; la CI applicativa non ne certifica il funzionamento.
 
 La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del catalogo, confini degli import, codifica delle credenziali del worker, esclusione dei file locali e avvio standalone. La fase 1 nel suo insieme rimane aperta fino al collaudo dell'ambiente container; questo incremento verifica le fondazioni applicative indipendenti da quel collaudo.
 
