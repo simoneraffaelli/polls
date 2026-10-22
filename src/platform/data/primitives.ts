@@ -7,11 +7,17 @@ export const calendarDateSchema = z.iso.date();
 export const utcInstantSchema = z.iso.datetime();
 
 export const internalIdSchema = z.string().trim().min(1);
-export const contentHashSchema = z.string().regex(/^[a-f0-9]{64}$/, "Expected a SHA-256 hex digest");
+export const contentHashSchema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/, "Expected a SHA-256 hex digest");
 export const publicHttpUrlSchema = z.url().refine((value) => {
   try {
     const url = new URL(value);
-    return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password
+    );
   } catch {
     return false;
   }
