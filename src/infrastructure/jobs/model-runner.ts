@@ -18,10 +18,22 @@ const requestSchema = z.strictObject({
   iterations: z.number().int().min(100).max(20_000),
 });
 
+function isUniqueViolation(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!current || typeof current !== "object") return false;
+    if ("code" in current && current.code === "23505") return true;
+    current = "cause" in current ? current.cause : null;
+  }
+  return false;
+}
+
 /** Explicit worker/CLI invocation only. No page request or clock schedule runs a model. */
 export async function runBaselineModel(db: Database, raw: unknown) {
   const request = requestSchema.parse(raw);
   const snapshot = parseModelSnapshot(request.snapshot);
+  if (request.iterations * snapshot.races.length > 5_000_000)
+    throw new Error("Model request exceeds worker computation budget");
   const inputSnapshotHash = await snapshotDigest(snapshot);
   const readExisting = async () => {
     const [prior] = await db
@@ -65,7 +77,7 @@ export async function runBaselineModel(db: Database, raw: unknown) {
   if (existing) return existing;
   const result = simulateBaseline(snapshot, request.iterations);
   const quality = assessModelQuality(snapshot, result);
-  const run = await createCompletedForecastRun(db, {
+  const runRequest = {
     questionId: snapshot.questionId,
     scope: snapshot.scope,
     kind: snapshot.kind,
@@ -83,17 +95,16 @@ export async function runBaselineModel(db: Database, raw: unknown) {
     results: result.questionOutcomeProbabilities,
     modelEvidence: { snapshot, result },
     publishIfEligible: quality.status === "experimental_candidate",
-  }).catch(async (error: unknown) => {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "23505"
-    ) {
+  } as const;
+  let run: Awaited<ReturnType<typeof createCompletedForecastRun>>;
+  try {
+    run = await createCompletedForecastRun(db, runRequest);
+  } catch (error) {
+    if (isUniqueViolation(error)) {
       const committed = await readExisting();
-      if (committed) return committed.run;
+      if (committed) return committed;
     }
     throw error;
-  });
+  }
   return { run, quality, publicationId: run.publicationId, repeated: false };
 }

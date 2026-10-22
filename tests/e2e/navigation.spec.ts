@@ -33,7 +33,9 @@ test("navigates the registered hierarchy and explains unavailable data", async (
   await expect(
     page.getByRole("heading", { name: "Gare strutturali" }),
   ).toBeVisible();
-  await expect(page.getByText(/registro dei run pubblicati/)).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Consulta run e scenari" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Percorso" }).getByRole("link"),
   ).toHaveCount(4);
@@ -58,9 +60,11 @@ test("navigates the registered hierarchy and explains unavailable data", async (
   ).toBeVisible();
   await expect(
     page.getByText(
-      process.env.PGDATABASE
-        ? /Nessun run di modello sigillato/
-        : /Archivio non configurato/,
+      process.env.E2E_SCENARIO_ID
+        ? /Scenario di prova CI/
+        : process.env.PGDATABASE
+          ? /Nessun run di modello sigillato/
+          : /Archivio non configurato/,
     ),
   ).toBeVisible();
   await page.goto("/usa/midterms/2026/races/house-al-01");

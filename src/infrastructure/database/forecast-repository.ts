@@ -349,7 +349,9 @@ export async function createCompletedForecastRun(
       .select({
         id: forecastQuestions.id,
         cutoffAt: forecastQuestions.cutoffAt,
+        outcomeDefinition: forecastQuestions.outcomeDefinition,
         resolutionRuleVersion: forecastQuestions.resolutionRuleVersion,
+        raceId: forecastQuestions.raceId,
       })
       .from(forecastQuestions)
       .innerJoin(editions, eq(editions.id, forecastQuestions.editionId))
@@ -363,6 +365,17 @@ export async function createCompletedForecastRun(
     if (!question)
       throw new Error("Forecast question does not belong to edition scope");
     if (evidence) {
+      if (
+        !evidence.snapshot.control ||
+        evidence.snapshot.control.outcomeKind !== question.outcomeDefinition ||
+        evidence.snapshot.control.version !== question.resolutionRuleVersion ||
+        (question.raceId !== null &&
+          (evidence.snapshot.races.length !== 1 ||
+            evidence.snapshot.races[0]?.raceId !== question.raceId))
+      )
+        throw new Error(
+          "Model outcome or resolution rule differs from question",
+        );
       if (
         new Date(evidence.snapshot.cutoffAt).getTime() !==
         question.cutoffAt.getTime()

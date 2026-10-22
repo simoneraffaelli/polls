@@ -13,6 +13,7 @@ export type PublicScenarioBasis = Readonly<{
   publicationId: string;
   runId: string;
   readState: "current" | "frozen";
+  cutoffAt: string;
   modelStatus: "experimental";
   modelVersion: string;
   seed: string;
@@ -26,6 +27,7 @@ export function publicScenarioBasis(input: {
   publicationId: string;
   runId: string;
   readState: "current" | "frozen";
+  cutoffAt: string;
   snapshot: ModelSnapshot;
   result: ModelResult;
 }): PublicScenarioBasis {
@@ -42,6 +44,7 @@ export function publicScenarioBasis(input: {
     publicationId: input.publicationId,
     runId: input.runId,
     readState: input.readState,
+    cutoffAt: input.cutoffAt,
     modelStatus: result.modelStatus,
     modelVersion: snapshot.modelVersion,
     seed: snapshot.seed,

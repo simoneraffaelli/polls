@@ -15,6 +15,8 @@ for attempt in $(seq 1 60); do
   sleep 2
 done
 curl --fail --silent http://127.0.0.1:3000/api/health/ready >/dev/null
+# Exercise the shipped seed with the restricted runtime role, keeping all sources disabled.
+docker compose exec -T worker node dist-worker/composition/seed-cli.js
 curl --fail --silent http://127.0.0.1:3000/usa/midterms/2026 >/dev/null
 status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   -X POST -H 'Origin: http://localhost:3000' -H 'Content-Type: application/json' \
@@ -35,6 +37,9 @@ DO $$ BEGIN
 END $$;
 SQL
 docker compose exec -T worker node -e "fetch('http://web:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# A bounded CI smoke measurement, not a representative VPS capacity test.
+docker compose exec -T -e LOAD_BASE_URL=http://web:3000 -e LOAD_REQUESTS=40 \
+  -e LOAD_CONCURRENCY=4 worker node --input-type=module < scripts/operations/load-check.mjs
 worker="$(docker compose ps -q worker)"
 [[ -n "$worker" ]]
 [[ "$(docker inspect --format '{{.RestartCount}}' "$worker")" == 0 ]]

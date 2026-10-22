@@ -19,6 +19,7 @@ import { publishAdminCollectionRun } from "@/infrastructure/jobs/collection-queu
 import { readWorkerConfig } from "@/infrastructure/config/worker-env";
 import { adminAudit } from "@/infrastructure/database/schema";
 import { AdminAccessError } from "@/infrastructure/auth/guard";
+import { readAdminForecastRunSummary } from "@/infrastructure/auth/admin-forecast-repository";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,13 @@ export async function GET(request: Request) {
   try {
     const admin = await requireAdmin(request);
     const overview = await readAdminOverview(admin.db);
-    return Response.json(overview, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    const forecastRuns = await readAdminForecastRunSummary(admin.db);
+    return Response.json(
+      { ...overview, forecastRuns },
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   } catch (error) {
     return adminErrorResponse(error);
   }

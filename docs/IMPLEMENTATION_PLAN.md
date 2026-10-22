@@ -12,6 +12,8 @@
 
 **Stato:** implementazione avviata per incrementi verificabili; avanzamento e limiti in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Nessuna distribuzione eseguita.
 
+**Modalità concordata con l'utente:** proseguire autonomamente nelle fasi implementabili, con sottoagenti, revisione dell'orchestratore, test e commit/push intermedi. Non è richiesta una revisione umana a ogni fase. Il collaudo operativo delle fasi 9–10 e il rilascio saranno eseguiti in occasione del deployment dell'utente, prima dell'apertura pubblica; i test automatici di sviluppo e la preparazione delle procedure si svolgono adesso. La disponibilità del codice non sostituisce né queste evidenze né la validazione statistica.
+
 ## 1. Obiettivo e decisioni definitive
 
 Realizzare un hub pubblico per consultare pronostici, sondaggi, mercati previsionali, notizie e loro evoluzione nel tempo. La prima sezione riguarderà le elezioni di metà mandato statunitensi. Il prodotto dovrà permettere di capire cosa prevedono i dati, come cambia la previsione e quali informazioni contribuiscono al cambiamento.

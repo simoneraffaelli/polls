@@ -20,7 +20,7 @@ Questo documento descrive i confini implementati. Per specifica completa e stato
 | `src/integrations/` | Adapter HTTP e import locali, con validazione, limiti e provenienza. |
 | `src/elections/model/`, `src/modules/usa/midterms/model/` | Motore puro, snapshot tipizzati, simulazione riproducibile, valutazione e scenari separati. |
 
-Il catalogo è configurazione interna tipizzata: gli ID sono distinti dai codici paese e dagli slug pubblici. La registrazione controlla unicità e appartenenza e conserva copie delle definizioni, così una modifica agli oggetti originari non altera le rotte già registrate. Gli helper usano la gerarchia canonica del catalogo e rifiutano riferimenti incoerenti. Le future osservazioni ricevute da provider richiederanno contratti e validazione separati.
+Il catalogo è configurazione interna tipizzata: gli ID sono distinti dai codici paese e dagli slug pubblici. La registrazione controlla unicità e appartenenza e conserva copie delle definizioni, così una modifica agli oggetti originari non altera le rotte già registrate. Gli helper usano la gerarchia canonica del catalogo e rifiutano riferimenti incoerenti. Le osservazioni ricevute dai provider passano da contratti e validazione separati.
 
 Le rotte dinamiche rappresentano paese, sezione ed edizione; una rotta esiste solo se il catalogo contiene la corrispondente gerarchia. Nella registrazione iniziale sono presenti esclusivamente USA/Midterms/2026. `/italy`, `/midterms` ed edizioni sconosciute restituiscono 404. `/admin` richiede autenticazione e ruolo verificati sul server; senza configurazione mostra indisponibilità. Le pagine preparatorie sono `noindex` e non mostrano osservazioni o percentuali dimostrative.
 

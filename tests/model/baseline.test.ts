@@ -404,6 +404,7 @@ describe("Midterms experimental baseline", () => {
       publicationId: "publication:one",
       runId: "run:one",
       readState: "frozen",
+      cutoffAt: input.cutoffAt,
       snapshot: input,
       result,
     });

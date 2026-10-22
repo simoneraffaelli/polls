@@ -12,6 +12,7 @@ import {
   parsePublicAsOf,
   publicPollFreshnessMinutes,
   readPublicArticles,
+  readPublicForecastCards,
   readPublicPolls,
   readPublicSources,
 } from "@/composition/observatory";
@@ -28,6 +29,7 @@ import { PollTable } from "@/ui/patterns/poll-table";
 import { NewsList } from "@/ui/patterns/news-list";
 import { SourceList } from "@/ui/patterns/source-list";
 import { DataNotice } from "@/ui/patterns/data-notice";
+import { PublishedForecastList } from "@/ui/patterns/published-forecast";
 
 type Route = { countrySlug: string; sectionSlug: string; editionSlug: string };
 type Props = {
@@ -71,7 +73,7 @@ export default async function EditionPage({ params, searchParams }: Props) {
     typeof query.asOf === "string" ? query.asOf : undefined,
   );
   if (!asOf) notFound();
-  const [polls, articles, sources] = await Promise.all([
+  const [polls, articles, sources, forecasts] = await Promise.all([
     readPublicPolls({
       scope,
       asOf,
@@ -80,6 +82,7 @@ export default async function EditionPage({ params, searchParams }: Props) {
     }),
     readPublicArticles(scope, asOf, 0, 5),
     readPublicSources(scope, asOf),
+    readPublicForecastCards(scope),
   ]);
   const freshness =
     sources.status === "ready"
@@ -142,14 +145,32 @@ export default async function EditionPage({ params, searchParams }: Props) {
                   }
             }
           />
-          <MetricCard
-            title="Previsioni"
-            state={{
-              status: "empty",
-              message:
-                "Il registro dei run pubblicati non è ancora collegato a questa pagina.",
-            }}
-          />
+          <section className="metric-card" aria-label="Previsioni pubblicate">
+            <h3>Previsioni pubblicate</h3>
+            {forecasts.status === "ready" ? (
+              <>
+                <p>
+                  {forecasts.value.length > 0
+                    ? `${forecasts.value.length} domande con un run sigillato e pubblicato.`
+                    : "Nessun run sigillato e pubblicato per questa edizione."}
+                </p>
+                <p>
+                  Stato corrente delle pubblicazioni, distinto dal filtro
+                  temporale dei sondaggi.
+                </p>
+                <Link href={midtermsScenariosPath(section, edition)}>
+                  Consulta run e scenari
+                </Link>
+              </>
+            ) : (
+              <DataNotice
+                state={{
+                  status: forecasts.status === "error" ? "error" : "empty",
+                  message: forecasts.message,
+                }}
+              />
+            )}
+          </section>
           <MetricCard
             title="Prezzi di mercato"
             state={{
@@ -159,6 +180,25 @@ export default async function EditionPage({ params, searchParams }: Props) {
             }}
           />
         </div>
+      </section>
+      <section
+        className="content-section"
+        aria-labelledby="published-forecast-title"
+      >
+        <h2 className="section-heading" id="published-forecast-title">
+          Previsioni pubblicate
+        </h2>
+        <PublishedForecastList
+          state={
+            forecasts.status === "ready"
+              ? { status: "ready", value: forecasts.value }
+              : {
+                  status: forecasts.status === "error" ? "error" : "empty",
+                  message: forecasts.message,
+                }
+          }
+          scenarioPath={midtermsScenariosPath(section, edition)}
+        />
       </section>
       <section className="content-section" aria-labelledby="overview-polls">
         <h2 className="section-heading" id="overview-polls">

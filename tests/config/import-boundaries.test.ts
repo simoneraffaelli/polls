@@ -12,7 +12,8 @@ describe("confini degli import", () => {
         (message) => message.ruleId === "import/no-restricted-paths",
       ),
     ).toBe(true);
-  }, 15_000);
+    // The first ESLint invocation loads the TypeScript resolver on cold Windows hosts.
+  }, 60_000);
 
   it("blocca la stessa dipendenza attraverso l'alias", async () => {
     const eslint = new ESLint();

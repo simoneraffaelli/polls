@@ -20,6 +20,7 @@ jobs:
       BETTER_AUTH_URL: http://127.0.0.1:3100
       E2E_ADMIN_EMAIL: e2e-admin@polls.invalid
       E2E_ADMIN_PASSWORD: ci_only_e2e_admin_password_123
+      E2E_SCENARIO_ID: 0d68c549-67c3-4855-8514-3228804bb024
     services:
       postgres:
         image: postgres:17.11-bookworm
@@ -65,6 +66,7 @@ jobs:
           PGPASSWORD: ci_only_poll_test_password
           BETTER_AUTH_SECRET: ci_only_auth_secret_at_least_32_characters
           BETTER_AUTH_URL: http://127.0.0.1:3100
+      - run: pnpm exec tsx tests/e2e/seed-scenario.ts
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

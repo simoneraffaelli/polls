@@ -9,6 +9,7 @@ import {
   midtermsPollHistoryPath,
   midtermsRacePath,
   midtermsRaces,
+  midtermsScenariosPath,
   validPublicUuid,
 } from "@/composition/catalog";
 import {
@@ -16,6 +17,7 @@ import {
   parsePublicOffset,
   publicPollFreshnessMinutes,
   readPublicArticles,
+  readPublicForecastCards,
   readPublicNewsCoverage,
   readPublicPolls,
   readPublicSources,
@@ -42,6 +44,7 @@ import { TimeSeriesChart } from "@/ui/patterns/time-series-chart";
 import { SourceList } from "@/ui/patterns/source-list";
 import { DataNotice } from "@/ui/patterns/data-notice";
 import { NewsCoverage } from "@/ui/patterns/news-coverage";
+import { PublishedForecastList } from "@/ui/patterns/published-forecast";
 
 type Route = {
   countrySlug: string;
@@ -133,6 +136,7 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
   ) {
     const chamber = viewId.endsWith(":house") ? "house" : "senate";
     const races = midtermsRaces.filter((race) => race.chamberId === chamber);
+    const forecasts = await readPublicForecastCards(scope);
     const pageSize = 40;
     const visible = races.slice(offset, offset + pageSize);
     body = (
@@ -186,12 +190,29 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
             Gare successive
           </Link>
         ) : null}
-        <DataNotice
-          state={{
-            status: "empty",
-            message:
-              "Il registro dei run pubblicati non è ancora consultabile qui.",
-          }}
+        <p>
+          I run previsionali pubblicati sono consultabili nella pagina dedicata,
+          separati dal catalogo strutturale delle gare.
+        </p>
+        <Link href={midtermsScenariosPath(section, edition)}>
+          Consulta run e scenari
+        </Link>
+        <h3>Previsioni pubblicate per questa camera</h3>
+        <PublishedForecastList
+          state={
+            forecasts.status === "ready"
+              ? {
+                  status: "ready",
+                  value: forecasts.value.filter(
+                    (card) => card.chamber === chamber,
+                  ),
+                }
+              : {
+                  status: forecasts.status === "error" ? "error" : "empty",
+                  message: forecasts.message,
+                }
+          }
+          scenarioPath={midtermsScenariosPath(section, edition)}
         />
       </section>
     );

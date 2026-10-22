@@ -7,9 +7,15 @@ import { recordPollRevision } from "../../src/infrastructure/database/poll-repos
 import { registerStructuralReference } from "../../src/infrastructure/database/structural-reference";
 import { registerPollOptionMapping } from "../../src/infrastructure/database/option-mapping";
 import { readPublishedModel } from "../../src/infrastructure/database/published-model";
+import {
+  readPublicPublicationHistory,
+  readPublishedInputSources,
+} from "../../src/infrastructure/database/publication-history-read";
+import { buildReviewedModelSnapshot } from "../../src/infrastructure/database/model-snapshot-builder";
 import { runBaselineModel } from "../../src/infrastructure/jobs/model-runner";
 import {
   adminMemberships,
+  configuredSources,
   forecastQuestions,
   races,
   runModelSnapshots,
@@ -19,6 +25,7 @@ import {
   createIsolatedDatabase,
   pollObservation,
   seedDatabase,
+  it2026,
   us2026,
   type IsolatedDatabase,
 } from "./harness";
@@ -30,10 +37,13 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     let snapshot: ModelSnapshot;
     let questionId: string;
     let cutoffAt: Date;
+    let sourceId: string;
 
     beforeAll(async () => {
       database = await createIsolatedDatabase();
-      const { sourceId, ingestionRunId } = await seedDatabase(database);
+      const seeded = await seedDatabase(database);
+      sourceId = seeded.sourceId;
+      const { ingestionRunId } = seeded;
       const reviewerUserId = `reviewer-${randomUUID()}`;
       await database.db.insert(user).values({
         id: reviewerUserId,
@@ -184,6 +194,23 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
     }, 30_000);
 
     it("publishes reviewed evidence atomically and reads only its sealed current/frozen run", async () => {
+      const assembled = await buildReviewedModelSnapshot(database.db, {
+        questionId,
+        scope: us2026,
+        structuralReferenceId: snapshot.structuralReferenceId,
+        inputAsOf: snapshot.inputAsOf,
+        kind: "forecast",
+        modelVersion: snapshot.modelVersion,
+        parameters: snapshot.parameters,
+        seed: snapshot.seed,
+      });
+      expect(assembled.polls).toHaveLength(1);
+      expect(assembled.polls[0]).toMatchObject({
+        optionMappingId: snapshot.polls[0]?.optionMappingId,
+        marginPoints: 1,
+        quality: 1,
+      });
+      snapshot = assembled;
       const swapped = {
         ...snapshot,
         seed: "swapped-seed",
@@ -199,6 +226,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       await expect(
         runBaselineModel(database.db, { snapshot: swapped, iterations: 100 }),
       ).rejects.toThrow(/orientation/);
+      await expect(
+        runBaselineModel(database.db, {
+          snapshot: {
+            ...snapshot,
+            control: { ...snapshot.control!, version: "another-rule" },
+          },
+          iterations: 100,
+        }),
+      ).rejects.toThrow(/resolution rule/);
       const completed = await runBaselineModel(database.db, {
         snapshot,
         iterations: 100,
@@ -227,6 +263,43 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
         proof: { structuralReferenceId: snapshot.structuralReferenceId },
       });
       expect(published?.result.modelStatus).toBe("experimental");
+      const history = await readPublicPublicationHistory(database.db, {
+        scope: us2026,
+        questionId,
+        limit: 10,
+      });
+      expect(history.items).toHaveLength(1);
+      expect(history.items[0]).toMatchObject({
+        publicationId: completed.publicationId,
+        runId: completed.run.runId,
+        modelStatus: "experimental",
+      });
+      expect(history.items[0]?.outcomes).toEqual(
+        published?.result.questionOutcomeProbabilities
+          .map((item) => ({
+            id: item.outcomeId,
+            probability: item.probability,
+          }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      );
+      expect(
+        (
+          await readPublicPublicationHistory(database.db, {
+            scope: it2026,
+            questionId,
+            limit: 10,
+          })
+        ).items,
+      ).toEqual([]);
+      await database.db
+        .update(configuredSources)
+        .set({ enabled: false })
+        .where(eq(configuredSources.id, sourceId));
+      const attribution = await readPublishedInputSources(database.db, {
+        scope: us2026,
+        runId: completed.run.runId,
+      });
+      expect(attribution.items).toMatchObject([{ sourceId, revisions: 1 }]);
       await expect(
         database.db
           .update(runModelSnapshots)
@@ -266,6 +339,15 @@ describe.skipIf(!process.env.TEST_DATABASE_URL)(
       });
       expect(result.quality.status).toBe("blocked");
       expect(result.publicationId).toBeNull();
+      expect(
+        (
+          await readPublicPublicationHistory(database.db, {
+            scope: us2026,
+            questionId,
+            limit: 10,
+          })
+        ).items.map((item) => item.runId),
+      ).toEqual([completed.run.runId]);
     });
   },
 );

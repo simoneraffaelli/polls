@@ -5,6 +5,16 @@ import {
   readPublishedModel,
 } from "@/infrastructure/database/published-model";
 import {
+  readPublicPublicationHistory,
+  readPublishedInputSources,
+} from "@/infrastructure/database/publication-history-read";
+import {
+  HOUSE_2026_RACES,
+  SENATE_2026_RACES,
+} from "@/modules/usa/midterms/catalog-2026";
+import { stableCatalogUuid } from "@/composition/sources";
+import type { PublishedForecastCard } from "@/platform/presentation/forecast";
+import {
   readObservatoryPollPage,
   readObservatorySources,
   readPollEditorialHistory,
@@ -155,6 +165,99 @@ export function readPublicPublishedModel(
   questionId: string,
 ) {
   return read((db) => readPublishedModel(db, { scope, questionId }));
+}
+
+const houseRaceIds = new Set(
+  HOUSE_2026_RACES.map((race) => stableCatalogUuid(race.id)),
+);
+const senateRaceIds = new Set(
+  SENATE_2026_RACES.map((race) => stableCatalogUuid(race.id)),
+);
+
+export function readPublicForecastCards(
+  scope: EditionScope,
+): Promise<PublicRead<readonly PublishedForecastCard[]>> {
+  return read(async (db) => {
+    const questions = await listPublishedModelQuestions(db, {
+      scope,
+      limit: 20,
+    });
+    return Promise.all(
+      questions.map(async (question): Promise<PublishedForecastCard> => {
+        const model = await readPublishedModel(db, {
+          scope,
+          questionId: question.questionId,
+        });
+        if (!model) throw new Error("Published model disappeared during read");
+        const [history, sources] = await Promise.all([
+          readPublicPublicationHistory(db, {
+            scope,
+            questionId: question.questionId,
+            limit: 10,
+          }),
+          readPublishedInputSources(db, {
+            scope,
+            runId: model.publication.runId,
+          }),
+        ]);
+        const raceIds = model.snapshot.races.map((race) => race.raceId);
+        const chamber = raceIds.every((id) => houseRaceIds.has(id))
+          ? "house"
+          : raceIds.every((id) => senateRaceIds.has(id))
+            ? "senate"
+            : null;
+        return {
+          questionId: question.questionId,
+          definition: question.outcomeDefinition,
+          raceIds,
+          chamber,
+          state: model.publication.state,
+          modelStatus: model.proof.modelStatus,
+          publicationId: model.publication.publicationId,
+          runId: model.publication.runId,
+          runSequence: model.publication.runSequence,
+          inputAsOf: model.publication.inputAsOf,
+          publishedAt: model.publication.publishedAt,
+          cutoffAtPublication: model.publication.cutoffAtPublication,
+          cutoffVersion: model.publication.cutoffVersion,
+          modelVersion: model.proof.modelVersion,
+          parameterVersion: model.proof.parameterVersion,
+          iterations: model.result.iterations,
+          modeledRaces: model.result.diagnostics.modeledRaces,
+          racesWithLocalPolls: model.result.diagnostics.racesWithLocalPolls,
+          quality: model.result.diagnostics.quality,
+          outcomes: model.result.questionOutcomeProbabilities.map((item) => ({
+            id: item.outcomeId,
+            probability: item.probability,
+          })),
+          raceOutcomes: model.result.raceWinProbabilities.map((item) => {
+            const estimate = model.result.races.find(
+              (race) => race.raceId === item.raceId,
+            );
+            if (!estimate)
+              throw new Error("Published race probability has no estimate");
+            return {
+              raceId: item.raceId,
+              positivePartyId: estimate.positive.partyId,
+              negativePartyId: estimate.negative.partyId,
+              positiveProbability: item.positiveProbability,
+            };
+          }),
+          partySeats: model.result.partySeats,
+          caucusSeats: model.result.caucusSeats,
+          sources: sources.items.map((item) => ({
+            id: item.sourceId,
+            name: item.name,
+            attribution: item.attribution,
+            revisions: item.revisions,
+          })),
+          sourcesTruncated: sources.hasMore,
+          history: history.items,
+          historyTruncated: history.hasMore,
+        };
+      }),
+    );
+  });
 }
 
 export const publicPollFreshnessMinutes = staleAfterMinutes;

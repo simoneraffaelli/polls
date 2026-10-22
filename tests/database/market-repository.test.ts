@@ -23,7 +23,6 @@ import {
   marketOutcomes,
   marketQuotes,
   marketQuestionLinks,
-  questionCutoffRevisions,
   sourceSectionBindings,
 } from "../../src/infrastructure/database/schema";
 import {
@@ -151,15 +150,6 @@ describe("configured market quote storage and comparison gates", () => {
         asOf: "2026-10-22T12:15:00.000Z",
       }),
     ).toMatchObject({ status: "unpublished", midpoint: null });
-    await database.db.insert(questionCutoffRevisions).values({
-      questionId: question.id,
-      version: 1,
-      cutoffAt: new Date("2026-11-03T00:00:00.000Z"),
-      cutoffLocal: "2026-11-02T19:00:00",
-      timeZone: "America/New_York",
-      calendarReference:
-        "https://www.fec.gov/introduction-campaign-finance/election-results-and-voting-information/",
-    });
     const pollSourceId = sourceIdFor("source:votehub:generic-ballot:2026");
     const [pollRun] = await database.db
       .insert(collectionRuns)
@@ -215,7 +205,10 @@ describe("configured market quote storage and comparison gates", () => {
       explanation:
         "Synthetic test mapping; no real market equivalence asserted",
     });
-    const goodAt = publication.publishedAt.toISOString();
+    // PostgreSQL keeps microseconds; the returned JS Date has millisecond precision.
+    const goodAt = new Date(
+      publication.publishedAt.getTime() + 1000,
+    ).toISOString();
     const goodObservedAt = new Date(
       publication.publishedAt.getTime() - 1000,
     ).toISOString();
@@ -247,7 +240,7 @@ describe("configured market quote storage and comparison gates", () => {
       marketOutcomeExternalId: "synthetic-token-yes-1",
     });
     const badAt = new Date(
-      publication.publishedAt.getTime() + 1000,
+      publication.publishedAt.getTime() + 2000,
     ).toISOString();
     await recordMarketQuote(database.db, {
       ...observation,

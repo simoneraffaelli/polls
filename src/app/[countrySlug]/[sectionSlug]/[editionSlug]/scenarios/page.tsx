@@ -12,7 +12,10 @@ import {
   readPublicPublishedModel,
 } from "@/composition/observatory";
 import { publicScenarioBasis } from "@/elections/model/public-scenario";
-import { forecastOutcomeLabel } from "@/platform/presentation/forecast";
+import {
+  forecastOutcomeLabel,
+  forecastQuestionLabel,
+} from "@/platform/presentation/forecast";
 import { Breadcrumbs } from "@/ui/patterns/breadcrumbs";
 import { EditionNavigation } from "@/ui/patterns/edition-navigation";
 import { DataNotice } from "@/ui/patterns/data-notice";
@@ -116,7 +119,7 @@ export default async function ScenariosPage({ params, searchParams }: Props) {
           <ul className="revision-list">
             {questions.value.map((question) => (
               <li key={question.questionId}>
-                <h3>{question.outcomeDefinition}</h3>
+                <h3>{forecastQuestionLabel(question.outcomeDefinition)}</h3>
                 <p>
                   {question.state === "frozen"
                     ? "Previsione congelata"
@@ -170,11 +173,11 @@ export default async function ScenariosPage({ params, searchParams }: Props) {
             </ul>
             <ScenarioCalculator
               key={selected.value.publication.runId}
-              cutoffAt={selected.value.publication.cutoffAtPublication}
               basis={publicScenarioBasis({
                 publicationId: selected.value.publication.publicationId,
                 runId: selected.value.publication.runId,
                 readState: selected.value.publication.state,
+                cutoffAt: selected.value.publication.cutoffAtPublication,
                 snapshot: selected.value.snapshot,
                 result: selected.value.result,
               })}

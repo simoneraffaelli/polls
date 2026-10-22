@@ -8,6 +8,7 @@ import {
   type CollectionSourceRegistration,
 } from "../infrastructure/jobs/collection-queue";
 import { readCollectionSourceRegistry } from "../composition/source-registry";
+import { registerModelWorker } from "../infrastructure/jobs/model-queue";
 
 const sources = new Map<string, CollectionSourceRegistration>();
 
@@ -35,6 +36,7 @@ async function main(): Promise<void> {
         return registration;
       },
     );
+    await registerModelWorker(database.db, boss);
     console.info("Worker ready; registered sources:", sources.size);
   } catch {
     if (boss) await boss.stop({ graceful: true, timeout: 30_000 });

@@ -12,13 +12,7 @@ type Response = {
   error?: string;
 };
 
-export function ScenarioCalculator({
-  basis,
-  cutoffAt,
-}: {
-  basis: PublicScenarioBasis;
-  cutoffAt: string;
-}) {
+export function ScenarioCalculator({ basis }: { basis: PublicScenarioBasis }) {
   const active = useRef<Worker | null>(null);
   const serial = useRef(0);
   const [swing, setSwing] = useState(0);
@@ -32,11 +26,14 @@ export function ScenarioCalculator({
   useEffect(() => () => active.current?.terminate(), []);
   useEffect(() => {
     const interval = window.setInterval(() => {
-      if (basis.readState === "frozen" || Date.now() >= Date.parse(cutoffAt))
+      if (
+        basis.readState === "frozen" ||
+        Date.now() >= Date.parse(basis.cutoffAt)
+      )
         setHistorical(true);
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [basis.readState, cutoffAt]);
+  }, [basis.readState, basis.cutoffAt]);
 
   function cancel() {
     active.current?.terminate();
@@ -52,7 +49,7 @@ export function ScenarioCalculator({
   }
 
   function calculate() {
-    if (Date.now() >= Date.parse(cutoffAt)) setHistorical(true);
+    if (Date.now() >= Date.parse(basis.cutoffAt)) setHistorical(true);
     active.current?.terminate();
     serial.current += 1;
     const requestId = serial.current;

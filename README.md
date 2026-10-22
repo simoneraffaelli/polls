@@ -18,9 +18,9 @@ Paesi, sezioni, edizioni e competizioni hanno identità distinte. Componenti, ra
 
 Next.js, React e TypeScript; worker Node.js nello stesso repository; PostgreSQL con Drizzle e pg-boss. Distribuzione tramite Docker Compose e Coolify sul server IONOS.
 
-Sono presenti web, catalogo, persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Il worker usa pg-boss e una pipeline con cursori transazionali, limiti HTTP e import controllato; le fonti vengono collegate soltanto tramite registrazioni esplicite. L'amministrazione riservata consente gestione delle fonti e import con anteprima; il motore sperimentale puro è implementato e il collegamento dei run è in corso.
+Sono presenti web, catalogo, persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Il worker usa pg-boss e una pipeline con cursori transazionali, limiti HTTP e import controllato; le fonti vengono collegate soltanto tramite registrazioni esplicite. L'amministrazione riservata consente gestione delle fonti, import con anteprima, rettifiche delle associazioni ed esclusioni dai futuri calcoli. Il motore sperimentale è collegato a input verificati, coda, archivio delle pubblicazioni e scenari nel browser.
 
-Le fonti iniziali previste includono Polymarket, VoteHub e RSS selezionati, con accesso gratuito e condizioni d'uso da verificare per i dati utilizzati. Sondaggi, previsioni del modello, prezzi dei mercati e tono delle notizie saranno presentati come misure distinte. L'IA esterna resta rinviata.
+Gli adapter ammessi al registro sono VoteHub generic ballot e RSS Monetary Policy della Federal Reserve; resta disponibile l'import controllato. L'adapter Polymarket è tecnico e inattivo, in attesa delle verifiche su riuso, timestamp ed equivalenza dei mercati. Il parser storico MEDSL Senate V8 conserva provenienza e limiti temporali. Sondaggi, previsioni del modello e prezzi dei mercati sono misure distinte. Il tono delle notizie e l'IA esterna restano disabilitati.
 
 La copertura di VoteHub per singole gare e archivi storici non è ancora dimostrata: il perimetro dipenderà dalla verifica delle fonti. Il confronto con i mercati userà una misura di prezzo uniforme, con qualità e freschezza esplicite, secondo il piano.
 
@@ -31,7 +31,7 @@ Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senat
 - [Piano di implementazione](docs/IMPLEMENTATION_PLAN.md): architettura, fasi, criteri di completamento, fonti, verifiche, costi e distribuzione.
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
 - [Avanzamento e verifiche](docs/IMPLEMENTATION_STATUS.md): consegne, controlli eseguiti e dipendenze ancora aperte.
-- [Architettura iniziale](docs/ARCHITECTURE.md): responsabilità e confini del primo incremento.
+- [Architettura](docs/ARCHITECTURE.md): responsabilità e confini implementati.
 - [Dizionario dei dati](docs/DATA_DICTIONARY.md): identità, provenienza, unità, revisioni e contratti di pubblicazione.
 - [Raccolta e import](docs/COLLECTION.md): ricevute, cursori, quarantena e limiti delle acquisizioni.
 - [Sistema grafico](docs/DESIGN_SYSTEM.md): token, componenti, accessibilità e significato delle misure.
@@ -41,10 +41,12 @@ Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senat
 - [Dataset storici](docs/HISTORICAL_DATA.md): fonti riusabili e limiti per la valutazione retrospettiva.
 - [Amministrazione](docs/ADMIN.md): account predisposti, autorizzazioni, import e audit.
 - [Metodologia sperimentale](docs/FORECAST_METHODOLOGY.md) e [valutazione](docs/FORECAST_EVALUATION.md): regole, criteri e limiti delle evidenze.
+- [Operazioni del modello](docs/MODEL_OPERATIONS.md): registrazione di domande, struttura e opzioni; preparazione degli input e calcolo nel worker.
+- [Contratti di valutazione](docs/EVALUATION.md) e [analisi delle notizie](docs/NEWS_ANALYSIS.md): evidenze richieste e significato dei pannelli descrittivi.
 - [Distribuzione](docs/DEPLOYMENT.md), [backup e ripristino](docs/BACKUP_RESTORE.md), [runbook](docs/RUNBOOK.md): preparazione del rilascio e controlli da eseguire sul server.
 - [Aggiungere una sezione](docs/ADDING_A_SECTION.md): estensioni senza collisioni fra paesi.
 
-La fase 0 resta aperta sulle verifiche dei provider e dell'ambiente di destinazione. Le fondazioni locali procedono per le parti indipendenti da quelle verifiche; il dettaglio dei controlli ancora necessari è nel documento di avanzamento.
+Restano aperte la copertura dei provider per le singole gare, la disponibilità di prior verificati e degli archivi necessari alla validazione, oltre alle verifiche dell'ambiente di destinazione. Non vengono creati automaticamente pronostici 2026 con dati mancanti. Il dettaglio dei controlli è nel documento di avanzamento.
 
 Lo sviluppo prosegue per fasi revisionate dall'orchestratore, con test e commit intermedi, senza approvazione umana a ogni passaggio. Il collaudo operativo sul server e il rilascio saranno eseguiti in occasione del deployment dell'utente; la loro preparazione fa parte del lavoro, mentre il loro esito resta da verificare nell'ambiente reale.
 
@@ -85,7 +87,7 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-I test ordinari non chiamano provider esterni. La prima installazione delle dipendenze e del browser richiede rete. I test del catalogo verificano isolamento tra paesi, riferimenti e rotte incoerenti, collisioni e mutazioni della configurazione; i test del browser coprono la navigazione essenziale, i metadati e le rotte escluse. Lo stato delle esecuzioni locali e della CI è riportato separatamente nel documento di avanzamento.
+I test ordinari non chiamano provider esterni. La prima installazione delle dipendenze e del browser richiede rete. I test coprono catalogo e secondo paese, provider, modello, limiti di calcolo e presentazione. In CI i test browser includono amministrazione e scenari con fixture sintetiche in un database dedicato; senza tale configurazione quei flussi vengono esplicitamente saltati, mentre resta verificabile la navigazione senza dati. Lo stato delle esecuzioni locali e della CI è riportato separatamente nel documento di avanzamento.
 
 I test di integrazione sono separati: `pnpm test:db` richiede `TEST_DATABASE_URL` verso un database PostgreSQL temporaneo dedicato, con `test` come segmento del nome. Il runner crea due schemi casuali, applica le migrazioni e rimuove soltanto quegli schemi; non usa `DATABASE_URL` come ripiego. La CI dispone del proprio servizio PostgreSQL 17. I test verificano rettifiche e retry, riferimenti fra edizioni, immutabilità degli input e termine/ordine delle pubblicazioni.
 

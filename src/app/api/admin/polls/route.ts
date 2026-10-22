@@ -24,11 +24,6 @@ export async function GET(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    if (error instanceof AdminPollConflict)
-      return Response.json(
-        { error: error.message },
-        { status: 409, headers: { "Cache-Control": "no-store" } },
-      );
     return adminErrorResponse(error);
   }
 }
@@ -48,6 +43,16 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Error && error.message === "request_too_large")
       return Response.json({ error: "Request is too large" }, { status: 413 });
+    if (
+      error instanceof Error &&
+      (error.message === "invalid_json" || error.message === "request_timeout")
+    )
+      return Response.json({ error: "Invalid command" }, { status: 400 });
+    if (error instanceof AdminPollConflict)
+      return Response.json(
+        { error: error.message },
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
     return adminErrorResponse(error);
   }
 }

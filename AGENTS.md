@@ -128,6 +128,7 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 
 ## Verifiche e consegna
 
+- Proseguire nelle fasi implementabili senza fermarsi per una revisione umana a ogni incremento. Usare i sottoagenti richiesti dall'utente e la revisione dell'orchestratore; commit e push autorizzati sono tappe di avanzamento. Il collaudo operativo e il rilascio sono rinviati al deployment dell'utente, mantenendo esplicite le prove ancora da eseguire.
 - Scegliere controlli proporzionati: per soli documenti verificare coerenza, percorsi e collegamenti; non inventare test applicativi assenti.
 - Per il codice usare i comandi definiti nel progetto: typecheck, lint, test mirati e build quando pertinenti.
 - Test di dominio per regole e formule; fixture per contratti dei provider; PostgreSQL reale di test per transazioni e vincoli; Playwright per flussi essenziali.

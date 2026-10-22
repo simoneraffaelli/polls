@@ -53,3 +53,18 @@ Una data non valida, un periodo invertito o un **istante** di pubblicazione dich
 La guardia pura respinge pubblicazioni dopo il cutoff, domande già chiuse, run incompleti, ricostruzioni, scope diversi, sequenze vecchie e regressioni di `inputAsOf`. Il repository deve ripetere i controlli **nella stessa transazione** usando il tempo del database e pubblicare il riferimento solo dopo il salvataggio completo. La lettura applica il cutoff anche se il worker è fermo: dopo il termine mostra l'ultimo run realmente pubblicato come congelato, oppure l'assenza di una previsione pubblicata. Le ricostruzioni restano identificabili a parte e non occupano `frozenRunId`.
 
 Gli schemi sono in `src/platform/data/`, `src/elections/polling/` e `src/platform/publication/`; test dei casi limite in `tests/domain/`. Nessuna osservazione reale o previsione è attiva con la sola presenza di questi contratti.
+
+## Evidenze del modello e rettifiche amministrative
+
+| Registro | Significato e vincoli |
+| --- | --- |
+| `structural_model_references` | Versione immutabile di catalogo, priori e regole, con fonte, disponibilità, acquisizione e attestazione amministrativa. La registrazione non genera priori e non prova da sola la validità scientifica del modello. |
+| `poll_model_option_mappings` | Associazione esplicita fra opzioni di una revisione, gara e orientamento politico. Evita di dedurre il significato da etichette libere o dal segno di un margine. Le correzioni producono nuovi record; i nuovi run devono usare l'associazione vigente. |
+| `run_model_snapshots` | Snapshot e risultato JSONB tipizzati, hash distinti, iterazioni e riferimenti al run. Inserimento prima del sigillo, nessuna modifica successiva. Il retry dello stesso snapshot con le stesse iterazioni riusa il risultato. |
+| `historical_result_records`, `historical_result_revisions` | Identità DOI/gara e revisioni append-only con versione del dataset, checksum del file, parser, disponibilità e acquisizione. I risultati di una release successiva non diventano input disponibili in passato. |
+| `poll_forecast_exclusions`, `poll_link_decisions` | Decisioni editoriali per futuri calcoli e associazioni, senza riscrivere revisioni o riferimenti dei run pubblicati. Attore e motivo libero rimangono amministrativi; lo storico pubblico espone soltanto stato e tempi. |
+| `admin_import_previews` | Anteprima vincolata a contenuto, attore, destinazione e scadenza. Il consumo, l'import e l'audit sono atomici; nessun payload originale viene conservato in questa tabella. |
+
+Le associazioni ai sondaggi conservano `createdAt`. La migrazione assegna alle associazioni precedenti un istante prudente di migrazione, senza inventarne la data originaria. I confronti temporali sensibili alla precisione usano PostgreSQL; le query SQL dirette trasportano gli istanti come millisecondi numerici validati, non come cast TypeScript di stringhe.
+
+Le basi degli scenari pubblici contengono stime aggregate, regole e parametri necessari alla simulazione, senza sondaggi grezzi o riferimenti privati. Il risultato è sempre uno scenario dell'utente; non aggiorna il puntatore della previsione pubblicata.

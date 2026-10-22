@@ -8,19 +8,21 @@ import {
   midtermsPollHistoryPath,
   midtermsRaceBySlug,
   midtermsRacePath,
+  midtermsScenariosPath,
 } from "@/composition/catalog";
 import { stableCatalogUuid } from "@/composition/sources";
 import {
   parsePublicAsOf,
   parsePublicOffset,
   publicPollFreshnessMinutes,
+  readPublicForecastCards,
   readPublicPolls,
 } from "@/composition/observatory";
 import { pollRows } from "@/platform/presentation/observatory";
 import { Breadcrumbs } from "@/ui/patterns/breadcrumbs";
 import { EditionNavigation } from "@/ui/patterns/edition-navigation";
 import { PollTable } from "@/ui/patterns/poll-table";
-import { DataNotice } from "@/ui/patterns/data-notice";
+import { PublishedForecastList } from "@/ui/patterns/published-forecast";
 
 type Route = {
   countrySlug: string;
@@ -84,14 +86,21 @@ export default async function RacePage({ params, searchParams }: Props) {
   );
   if (!asOf || offset === null) notFound();
   const raceId = stableCatalogUuid(race.id);
-  const polls = await readPublicPolls({
-    scope,
-    raceId,
-    asOf,
-    limit: 25,
-    offset,
-    staleAfterMinutes: publicPollFreshnessMinutes,
-  });
+  const [polls, forecasts] = await Promise.all([
+    readPublicPolls({
+      scope,
+      raceId,
+      asOf,
+      limit: 25,
+      offset,
+      staleAfterMinutes: publicPollFreshnessMinutes,
+    }),
+    readPublicForecastCards(scope),
+  ]);
+  const raceForecasts =
+    forecasts.status === "ready"
+      ? forecasts.value.filter((card) => card.raceIds.includes(raceId))
+      : [];
   const path = midtermsRacePath(section, edition, race);
   const label = raceName(race);
   return (
@@ -135,15 +144,26 @@ export default async function RacePage({ params, searchParams }: Props) {
           </div>
           <div>
             <dt>Pronostico</dt>
-            <dd>Registro dei run non ancora consultabile</dd>
+            <dd>
+              {raceForecasts.length > 0
+                ? `${raceForecasts.length} domande con un run pubblicato che comprende la gara`
+                : forecasts.status === "error"
+                  ? "Stato del registro temporaneamente non disponibile"
+                  : "Nessun run pubblicato che comprende questa gara"}
+            </dd>
           </div>
         </dl>
-        <DataNotice
-          state={{
-            status: "empty",
-            message:
-              "Non esiste una probabilità pubblicata per questa gara. Il catalogo dei seggi non è un modello previsionale.",
-          }}
+        <PublishedForecastList
+          state={
+            forecasts.status === "ready"
+              ? { status: "ready", value: raceForecasts }
+              : {
+                  status: forecasts.status === "error" ? "error" : "empty",
+                  message: forecasts.message,
+                }
+          }
+          scenarioPath={midtermsScenariosPath(section, edition)}
+          raceId={raceId}
         />
       </section>
       <section className="content-section" aria-labelledby="race-polls">

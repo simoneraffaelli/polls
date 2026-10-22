@@ -23,6 +23,7 @@ import {
 import { collectionRuns, sourceCursors } from "../database/schema";
 
 export const COLLECTION_QUEUE = "collect-source-page";
+export const MODEL_QUEUE = "run-baseline-model";
 export const QUEUE_SCHEMA = "polls_jobs";
 const RETRY_LIMIT = 3;
 const MAX_DEFERRED_ATTEMPTS = 3;
@@ -87,6 +88,15 @@ export async function installCollectionQueue(
       retryBackoff: true,
       retryDelayMax: 60,
       expireInSeconds: 300,
+      retentionSeconds: 7 * 24 * 60 * 60,
+    });
+    await boss.createQueue(MODEL_QUEUE, {
+      policy: "standard",
+      retryLimit: 2,
+      retryDelay: 10,
+      retryBackoff: true,
+      retryDelayMax: 120,
+      expireInSeconds: 600,
       retentionSeconds: 7 * 24 * 60 * 60,
     });
   } finally {

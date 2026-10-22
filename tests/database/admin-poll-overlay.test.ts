@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   seedObservatoryStructure,
@@ -15,6 +15,7 @@ import {
   readPollEditorialHistory,
 } from "../../src/infrastructure/database/observatory-repository";
 import {
+  adminMemberships,
   collectionRuns,
   pollEditionLinks,
   pollForecastExclusions,
@@ -30,6 +31,13 @@ import {
   type IsolatedDatabase,
 } from "./harness";
 
+async function databaseAsOf(database: IsolatedDatabase): Promise<string> {
+  const result = await database.db.execute(
+    sql`SELECT CEIL(EXTRACT(EPOCH FROM clock_timestamp()) * 1000) AS epoch_ms`,
+  );
+  return new Date(Number(result.rows[0]?.epoch_ms)).toISOString();
+}
+
 describe("single-poll editorial overlay", () => {
   let database: IsolatedDatabase;
   const actorUserId = `admin-${randomUUID()}`;
@@ -44,6 +52,7 @@ describe("single-poll editorial overlay", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await database.db.insert(adminMemberships).values({ userId: actorUserId });
   }, 30_000);
   afterAll(async () => {
     await database?.cleanup();
@@ -66,7 +75,9 @@ describe("single-poll editorial overlay", () => {
       ),
       { scope: us2026, raceId: null },
     );
-    const beforeDecision = new Date().toISOString();
+    const beforeDecision = await databaseAsOf(database);
+    // Keep the first as-of strictly before the following admin decision.
+    await database.db.execute(sql`SELECT pg_sleep(0.005)`);
     const exclusion = await applyAdminPollCommand(database.db, actorUserId, {
       action: "poll.excluded",
       scope: us2026,
@@ -90,7 +101,7 @@ describe("single-poll editorial overlay", () => {
       reason: "Competizione verificata",
     });
     expect(corrected?.linkId).not.toBe(recorded.linkId);
-    const afterDecision = new Date(Date.now() + 1000).toISOString();
+    const afterDecision = await databaseAsOf(database);
     const historicalView = await readObservatoryPollPage(database.db, {
       scope: us2026,
       limit: 10,

@@ -7,6 +7,8 @@ import { AdminImportForm } from "./import-form";
 import { isKnownCollectibleSource } from "@/composition/source-registry";
 import { readAdminPollLinks } from "@/infrastructure/auth/admin-poll-repository";
 import { PollOverlayForm } from "./poll-overlay-form";
+import { readAdminForecastRunSummary } from "@/infrastructure/auth/admin-forecast-repository";
+import { AdminForecastSummary } from "./forecast-summary";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -46,6 +48,7 @@ export default async function AdminPage({
     ? Math.min(Number(rawOffset), 10_000)
     : 0;
   const pollPage = await readAdminPollLinks(admin.db, pollOffset);
+  const forecastRuns = await readAdminForecastRunSummary(admin.db);
   const manualSource = overview.sources.find(
     (source) => source.providerId === "provider:manual-import",
   );
@@ -151,6 +154,7 @@ export default async function AdminPage({
           </a>
         )}
       </nav>
+      <AdminForecastSummary runs={forecastRuns} />
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">Raccolte recenti</h2>
         <p className="mt-2 text-sm">
