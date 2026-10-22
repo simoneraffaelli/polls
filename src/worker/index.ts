@@ -2,14 +2,14 @@ import { readWorkerConfig } from "../infrastructure/config/worker-env";
 import { createDatabase } from "../infrastructure/database/client";
 import {
   reconcileCollectionRuns,
-  registerPollCollectionWorker,
+  registerCollectionWorker,
   startCollectionQueue,
   syncPollCollectionSchedules,
-  type PollSourceRegistry,
+  type CollectionSourceRegistration,
 } from "../infrastructure/jobs/collection-queue";
+import { readCollectionSourceRegistry } from "../composition/source-registry";
 
-// Sources are enabled only after their adapter and rights checks are configured.
-const sources: PollSourceRegistry = new Map();
+const sources = new Map<string, CollectionSourceRegistration>();
 
 async function main(): Promise<void> {
   const config = readWorkerConfig(process.env);
@@ -20,10 +20,22 @@ async function main(): Promise<void> {
   let boss: Awaited<ReturnType<typeof startCollectionQueue>> | undefined;
   try {
     boss = await startCollectionQueue(config.databaseUrl);
+    const initial = await readCollectionSourceRegistry(database.db);
+    for (const [id, registration] of initial) sources.set(id, registration);
     await syncPollCollectionSchedules(boss, sources);
     await reconcileCollectionRuns(database.db, boss);
-    await registerPollCollectionWorker(database.db, boss, sources);
-    console.info("Worker ready; active poll sources:", sources.size);
+    await registerCollectionWorker(
+      database.db,
+      boss,
+      sources,
+      async (sourceId) => {
+        const fresh = await readCollectionSourceRegistry(database.db);
+        const registration = fresh.get(sourceId);
+        if (registration) sources.set(sourceId, registration);
+        return registration;
+      },
+    );
+    console.info("Worker ready; registered sources:", sources.size);
   } catch {
     if (boss) await boss.stop({ graceful: true, timeout: 30_000 });
     await database.close();
@@ -31,9 +43,27 @@ async function main(): Promise<void> {
   }
 
   let stopping = false;
+  let refreshing = false;
+  const refresh = setInterval(() => {
+    if (stopping || refreshing) return;
+    refreshing = true;
+    void readCollectionSourceRegistry(database.db)
+      .then(async (updated) => {
+        if (stopping) return;
+        sources.clear();
+        for (const [id, registration] of updated) sources.set(id, registration);
+        await syncPollCollectionSchedules(boss, sources);
+      })
+      .catch(() => console.error("Collection source refresh failed"))
+      .finally(() => {
+        refreshing = false;
+      });
+  }, 60_000);
+  refresh.unref();
   const shutdown = async () => {
     if (stopping) return;
     stopping = true;
+    clearInterval(refresh);
     try {
       await boss.stop({ graceful: true, timeout: 30_000 });
       await database.close();

@@ -49,6 +49,9 @@ function pageHash(
 /** Run identity and cursor snapshot are stored before enqueueing; no observation time is assigned yet. */
 export const MAX_PAGES_PER_CYCLE = 20;
 export const MAX_CYCLE_MS = 120_000;
+type DatabaseTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
 
 export async function beginCollectionRun(
   db: Database,
@@ -152,6 +155,75 @@ export async function beginCollectionRun(
   });
 }
 
+/** A reviewed local import uses a durable run but never enqueues an HTTP job. */
+export async function beginManualImportRun(
+  db: Database,
+  sourceId: string,
+  runId: string,
+): Promise<CollectionRun> {
+  const source = uuidSchema.parse(sourceId);
+  const id = uuidSchema.parse(runId);
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT id FROM configured_sources WHERE id = ${source} FOR SHARE`,
+    );
+    const [configured] = await tx
+      .select({
+        enabled: configuredSources.enabled,
+        providerId: configuredSources.providerId,
+      })
+      .from(configuredSources)
+      .where(eq(configuredSources.id, source));
+    if (
+      !configured?.enabled ||
+      configured.providerId !== "provider:manual-import"
+    )
+      throw new CollectionError(
+        "source_disabled",
+        "Manual import source is unavailable",
+      );
+    await tx
+      .insert(sourceCursors)
+      .values({ sourceId: source })
+      .onConflictDoNothing();
+    await tx.execute(
+      sql`SELECT source_id FROM source_cursors WHERE source_id = ${source} FOR UPDATE`,
+    );
+    const [existing] = await tx
+      .select()
+      .from(collectionRuns)
+      .where(eq(collectionRuns.id, id));
+    if (existing) {
+      if (existing.sourceId !== source || existing.status === "failed")
+        throw new CollectionError("schema", "Manual import run is invalid");
+      return {
+        sourceId: source,
+        runId: id,
+        cursorBefore: existing.cursorBefore,
+        cursorGenerationBefore: existing.cursorGenerationBefore,
+      };
+    }
+    const [cursor] = await tx
+      .select()
+      .from(sourceCursors)
+      .where(eq(sourceCursors.sourceId, source));
+    if (!cursor) throw new Error("Manual import cursor unavailable");
+    await tx.insert(collectionRuns).values({
+      id,
+      sourceId: source,
+      status: "running",
+      cursorBefore: cursor.cursor,
+      cursorGenerationBefore: cursor.generation,
+    });
+    return {
+      sourceId: source,
+      runId: id,
+      cursorBefore: cursor.cursor,
+      cursorGenerationBefore: cursor.generation,
+    };
+  });
+}
+
 export async function loadCollectionRun(
   db: Database,
   runId: unknown,
@@ -206,6 +278,7 @@ export async function assertCollectionSourceEnabled(
 
 export function createPollCollectionPageStore(
   db: Database,
+  onCommitted?: (tx: DatabaseTransaction) => Promise<void>,
 ): CollectionPageStore<PollObservation> {
   return {
     async readCommittedPage(
@@ -451,6 +524,7 @@ export function createPollCollectionPageStore(
             retryNotBefore: null,
           })
           .where(eq(collectionRuns.id, run.runId));
+        if (onCommitted) await onCommitted(tx);
         return {
           saved: observations.length,
           quarantinedCount: quarantined.length,

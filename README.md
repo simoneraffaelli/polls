@@ -18,7 +18,7 @@ Paesi, sezioni, edizioni e competizioni hanno identità distinte. Componenti, ra
 
 Next.js, React e TypeScript; worker Node.js nello stesso repository; PostgreSQL con Drizzle e pg-boss. Distribuzione tramite Docker Compose e Coolify sul server IONOS.
 
-Sono presenti web, catalogo, persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Il worker usa pg-boss e una pipeline con cursori transazionali, limiti HTTP e import controllato; le fonti vengono collegate soltanto tramite registrazioni esplicite. Autenticazione e modello saranno collegati nelle rispettive fasi.
+Sono presenti web, catalogo, persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Il worker usa pg-boss e una pipeline con cursori transazionali, limiti HTTP e import controllato; le fonti vengono collegate soltanto tramite registrazioni esplicite. L'amministrazione riservata consente gestione delle fonti e import con anteprima; il motore sperimentale puro è implementato e il collegamento dei run è in corso.
 
 Le fonti iniziali previste includono Polymarket, VoteHub e RSS selezionati, con accesso gratuito e condizioni d'uso da verificare per i dati utilizzati. Sondaggi, previsioni del modello, prezzi dei mercati e tono delle notizie saranno presentati come misure distinte. L'IA esterna resta rinviata.
 
@@ -87,7 +87,7 @@ I test di integrazione sono separati: `pnpm test:db` richiede `TEST_DATABASE_URL
 
 Le migrazioni si applicano esplicitamente con `pnpm db:migrate`, usando `DATABASE_URL` oppure le variabili `PG*` riportate sotto. Il comando non carica automaticamente `.env` e non viene eseguito all'avvio del web. Le migrazioni versionate sono in `drizzle/`; il registro e un lock PostgreSQL impediscono esecuzioni concorrenti. Per generare una nuova migrazione usare `pnpm exec drizzle-kit generate --name=nome_descrittivo`; i trigger SQL aggiunti a mano richiedono revisione oltre al confronto dello schema Drizzle.
 
-Prima del worker eseguire anche `pnpm queue:install` con le variabili `PG*`: installa/aggiorna lo schema pg-boss e la definizione della coda una sola volta per rilascio. Il worker ordinario richiede database e coda già predisposti e non ne esegue le migrazioni. Il registro iniziale delle fonti è vuoto; l'avvio non attiva raccolte esterne.
+Prima del worker eseguire anche `pnpm queue:install` con le variabili `PG*`: installa/aggiorna lo schema pg-boss e la definizione della coda una sola volta per rilascio. Il worker ordinario richiede database e coda già predisposti e non ne esegue le migrazioni. Il registro ammette VoteHub e RSS Fed, ma richiede seed e attivazione esplicita della fonte e della sua associazione; l'avvio da solo non attiva raccolte esterne.
 
 ## Web, worker e PostgreSQL in container
 

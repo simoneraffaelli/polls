@@ -15,6 +15,13 @@
       "when": 1792669507497,
       "tag": "0001_collection_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792671002959,
+      "tag": "0002_admin_auth",
+      "breakpoints": true
     }
   ]
 }

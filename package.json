@@ -22,10 +22,13 @@
     "db:generate": "drizzle-kit generate --name=change",
     "db:migrate": "tsx scripts/migrate-db.ts",
     "queue:install": "tsx src/worker/install-queue.ts",
+    "admin:provision": "node dist-worker/worker/provision-admin.js",
     "format": "prettier --write src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts",
     "format:check": "prettier --check src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.12",
+    "better-auth": "1.7.12",
     "drizzle-orm": "0.45.4",
     "fast-xml-parser": "5.11.2",
     "next": "16.4.2",

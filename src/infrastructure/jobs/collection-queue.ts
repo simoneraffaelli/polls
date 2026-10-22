@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { PgBoss } from "pg-boss";
 import { z } from "zod";
 import type { PollObservation } from "../../elections/polling/poll";
+import type { ArticleObservation } from "../../platform/data/article";
 import type {
   CollectionDestination,
   SourceAdapter,
@@ -10,6 +11,7 @@ import type {
 import { collectOnePage } from "../../platform/collection/collect-page";
 import { CollectionError } from "../../platform/collection/errors";
 import type { Database } from "../database/client";
+import { createArticleCollectionPageStore } from "../database/article-repository";
 import {
   beginCollectionRun,
   assertCollectionSourceEnabled,
@@ -20,7 +22,7 @@ import {
 } from "../database/collection-repository";
 import { collectionRuns, sourceCursors } from "../database/schema";
 
-export const COLLECTION_QUEUE = "collect-poll-page";
+export const COLLECTION_QUEUE = "collect-source-page";
 export const QUEUE_SCHEMA = "polls_jobs";
 const RETRY_LIMIT = 3;
 const MAX_DEFERRED_ATTEMPTS = 3;
@@ -36,11 +38,24 @@ export type PollSourceRegistration = {
   schedule?: { cron: string };
 };
 export type PollSourceRegistry = ReadonlyMap<string, PollSourceRegistration>;
+export type ArticleSourceRegistration = {
+  family: "articles";
+  adapter: SourceAdapter<ArticleObservation>;
+  destinations: readonly CollectionDestination[];
+  schedule?: { cron: string };
+};
+export type CollectionSourceRegistration =
+  (PollSourceRegistration & { family: "polls" }) | ArticleSourceRegistration;
+export type CollectionSourceRegistry = ReadonlyMap<
+  string,
+  CollectionSourceRegistration
+>;
 
 function newBoss(
   connectionString: string,
   install: boolean,
   schema = QUEUE_SCHEMA,
+  publisher = false,
 ): PgBoss {
   return new PgBoss({
     connectionString,
@@ -48,8 +63,9 @@ function newBoss(
     migrate: install,
     createSchema: install,
     max: 2,
-    schedule: !install,
-    supervise: true,
+    schedule: !install && !publisher,
+    supervise: !publisher,
+    persistQueueStats: false,
   });
 }
 
@@ -87,6 +103,24 @@ export async function startCollectionQueue(
   boss.on("error", () => console.error("Collection queue connection error"));
   await boss.start({ attempts: 3 });
   return boss;
+}
+
+/** Brief admin publisher connection; the worker still owns job execution. */
+export async function publishAdminCollectionRun(
+  db: Database,
+  connectionString: string,
+  sourceId: string,
+): Promise<string> {
+  const boss = newBoss(connectionString, false, QUEUE_SCHEMA, true);
+  boss.on("error", () => {
+    /* The caller receives a generic failure. */
+  });
+  try {
+    await boss.start({ attempts: 2 });
+    return await enqueueCollectionRun(db, boss, sourceId);
+  } finally {
+    await boss.stop({ graceful: true, timeout: 10_000 });
+  }
 }
 
 async function updateRunError(
@@ -289,7 +323,7 @@ async function deferForRetryAfter(
 /** Only explicitly registered sources receive schedules; stale registrations are removed. */
 export async function syncPollCollectionSchedules(
   boss: PgBoss,
-  registry: PollSourceRegistry,
+  registry: ReadonlyMap<string, { schedule?: { cron: string } }>,
 ): Promise<void> {
   const existing = await boss.getSchedules(COLLECTION_QUEUE);
   for (const schedule of existing) {
@@ -310,9 +344,13 @@ export async function syncPollCollectionSchedules(
 export async function registerPollCollectionWorker(
   db: Database,
   boss: PgBoss,
-  registry: PollSourceRegistry,
+  registry: PollSourceRegistry | CollectionSourceRegistry,
+  resolveSource?: (
+    sourceId: string,
+  ) => Promise<CollectionSourceRegistration | undefined>,
 ): Promise<void> {
-  const store = createPollCollectionPageStore(db);
+  const pollStore = createPollCollectionPageStore(db);
+  const articleStore = createArticleCollectionPageStore(db);
   await boss.work<z.infer<typeof jobSchema>>(
     COLLECTION_QUEUE,
     {
@@ -330,7 +368,10 @@ export async function registerPollCollectionWorker(
         ];
       if (parsed.data.kind === "start") {
         try {
-          if (!registry.has(parsed.data.sourceId))
+          if (
+            !registry.has(parsed.data.sourceId) &&
+            !(await resolveSource?.(parsed.data.sourceId))
+          )
             throw new CollectionError(
               "source_disabled",
               "Source is not registered",
@@ -373,7 +414,8 @@ export async function registerPollCollectionWorker(
             { id: job.id, status: "failed", output: { code: "rate_limited" } },
           ];
         }
-        const source = registry.get(run.sourceId);
+        const source =
+          registry.get(run.sourceId) ?? (await resolveSource?.(run.sourceId));
         if (!source)
           throw new CollectionError(
             "source_disabled",
@@ -381,14 +423,30 @@ export async function registerPollCollectionWorker(
           );
         if (stored.status !== "succeeded")
           await assertCollectionSourceEnabled(db, run.sourceId);
-        await collectOnePage({
-          adapter: source.adapter,
-          store,
-          run,
-          destinations: source.destinations,
-          signal: job.signal,
-          maxObservationsPerPage: 500,
-        });
+        if ("family" in source && source.family === "articles") {
+          await collectOnePage({
+            adapter: source.adapter,
+            store: articleStore,
+            run,
+            destinations: source.destinations,
+            signal: job.signal,
+            maxObservationsPerPage: 500,
+          });
+        } else {
+          if (source.adapter.family !== "polls")
+            throw new CollectionError(
+              "schema",
+              "Collection adapter family is invalid",
+            );
+          await collectOnePage({
+            adapter: source.adapter as SourceAdapter<PollObservation>,
+            store: pollStore,
+            run,
+            destinations: source.destinations,
+            signal: job.signal,
+            maxObservationsPerPage: 500,
+          });
+        }
         await enqueueNextPage(db, boss, runId);
         return [{ id: job.id, status: "completed" }];
       } catch (error) {
@@ -428,3 +486,5 @@ export async function registerPollCollectionWorker(
     },
   );
 }
+
+export const registerCollectionWorker = registerPollCollectionWorker;

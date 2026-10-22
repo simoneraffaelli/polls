@@ -87,3 +87,7 @@ Le viste dell'edizione e i componenti comuni distinguono intenzioni di voto, pro
 | Build e registro | Luogo delle build e quote da confermare prima del rilascio; con 4 GB RAM occorre misurare il margine effettivo e valutare build esterna |
 
 La fase 0 resta aperta per le voci mancanti. Prosegue il lavoro implementabile senza credenziali di produzione o accesso al VPS, con test isolati e revisione dell'orchestratore. I provider non ancora ammessi rimangono disabilitati; nessun dato o risultato di validazione viene inventato per aggirare una dipendenza mancante.
+
+### Amministrazione e letture persistenti
+
+Implementati autenticazione riservata, provisioning locale, controllo server del ruolo, audit, import con anteprima vincolata e scadenza, seed idempotente e registro delle fonti. Le query dell'osservatorio leggono revisioni, provenienza, errori e paginazione stabile. Typecheck, lint, 85 test ordinari e build locale superati; i nuovi test PostgreSQL attendono la CI di questo incremento. Le fonti rimangono disabilitate per impostazione predefinita.
