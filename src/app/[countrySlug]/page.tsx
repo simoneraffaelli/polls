@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { catalog, canonicalUrl } from "@/composition/catalog";
 import { Breadcrumbs } from "@/ui/patterns/breadcrumbs";
-import { EmptyState } from "@/ui/patterns/empty-state";
 import { LinkCard } from "@/ui/patterns/link-card";
 
 type Props = { params: Promise<{ countrySlug: string }> };
@@ -47,7 +46,6 @@ export default async function CountryPage({ params }: Props) {
           ))}
         </div>
       </section>
-      <EmptyState />
     </>
   );
 }

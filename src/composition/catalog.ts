@@ -1,5 +1,14 @@
 import { midtermsSection } from "@/modules/usa/midterms/definition";
-import { createCatalog, type EditionViewDefinition } from "@/platform/catalog";
+import {
+  createCatalog,
+  type EditionDefinition,
+  type EditionViewDefinition,
+  type SectionDefinition,
+} from "@/platform/catalog";
+import {
+  HOUSE_2026_RACES,
+  SENATE_2026_RACES,
+} from "@/modules/usa/midterms/catalog-2026";
 
 const midtermsViews: readonly EditionViewDefinition[] = [
   {
@@ -59,6 +68,57 @@ export const catalog = createCatalog(
 );
 
 export const siteOrigin = "https://polls.simone.ooo";
+
+export const midtermsRaces = Object.freeze([
+  ...HOUSE_2026_RACES,
+  ...SENATE_2026_RACES,
+]);
+
+export function midtermsRaceBySlug(slug: string) {
+  return midtermsRaces.find(
+    (race) => `${race.chamberId}-${race.publicSlug}` === slug,
+  );
+}
+
+export function midtermsRacePath(
+  section: SectionDefinition,
+  edition: EditionDefinition,
+  race: (typeof midtermsRaces)[number],
+) {
+  if (
+    section.id !== midtermsSection.id ||
+    edition.id !== "edition:us:midterms:2026" ||
+    !midtermsRaces.some((entry) => entry.id === race.id)
+  )
+    throw new Error("Unregistered Midterms race");
+  return `${catalog.editionPath(section, edition)}/races/${race.chamberId}-${race.publicSlug}`;
+}
+
+export function midtermsScenariosPath(
+  section: SectionDefinition,
+  edition: EditionDefinition,
+) {
+  if (
+    section.id !== midtermsSection.id ||
+    edition.id !== "edition:us:midterms:2026"
+  )
+    throw new Error("Unregistered Midterms edition");
+  return `${catalog.editionPath(section, edition)}/scenarios`;
+}
+
+export function midtermsPollHistoryPath(
+  section: SectionDefinition,
+  edition: EditionDefinition,
+  pollId: string,
+) {
+  if (
+    section.id !== midtermsSection.id ||
+    edition.id !== "edition:us:midterms:2026" ||
+    !/^[a-f0-9-]{36}$/.test(pollId)
+  )
+    throw new Error("Invalid Midterms poll history reference");
+  return `${catalog.editionPath(section, edition)}/polls/${pollId}`;
+}
 
 export function editionNavigation(
   section: typeof midtermsSection,

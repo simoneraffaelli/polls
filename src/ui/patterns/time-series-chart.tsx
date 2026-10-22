@@ -71,7 +71,9 @@ export function TimeSeriesChart({
           <tbody>
             {state.value.map((point) => (
               <tr key={`${point.date}:${point.label}`}>
-                <th scope="row">{point.label}</th>
+                <th scope="row">
+                  {point.date} · {point.label}
+                </th>
                 <td>{point.value}</td>
               </tr>
             ))}

@@ -1,4 +1,5 @@
 import type { Availability, PollRow } from "@/platform/presentation/models";
+import Link from "next/link";
 import { DataNotice } from "./data-notice";
 import { SourceAttribution } from "./source-attribution";
 
@@ -42,6 +43,9 @@ export function PollTable({
               <th scope="row">
                 <strong>{poll.pollster}</strong>
                 <span>{poll.subject}</span>
+                {poll.historyHref ? (
+                  <Link href={poll.historyHref}>Vedi revisioni</Link>
+                ) : null}
               </th>
               <td>{poll.observedPeriod}</td>
               <td>

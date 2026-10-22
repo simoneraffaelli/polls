@@ -1,13 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-test("navigates the registered hierarchy and explains the empty state", async ({
+test("navigates the registered hierarchy and explains unavailable data", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page).toHaveTitle("Polls");
-  await expect(
-    page.getByRole("heading", { name: "Nessun dato acquisito" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Paesi" })).toBeVisible();
   await page.getByRole("link", { name: /USA/ }).click();
   await expect(page).toHaveURL(/\/usa$/);
   await page.getByRole("link", { name: /Midterms/ }).click();
@@ -26,7 +24,7 @@ test("navigates the registered hierarchy and explains the empty state", async ({
     /noindex/,
   );
   await expect(
-    page.getByRole("heading", { name: "Nessun dato acquisito" }),
+    page.getByRole("heading", { name: "Dati e significati" }),
   ).toBeVisible();
   await expect(page.locator("main")).not.toContainText("%");
   const views = page.getByRole("navigation", { name: "Viste dell'edizione" });
@@ -34,11 +32,9 @@ test("navigates the registered hierarchy and explains the empty state", async ({
   await views.getByRole("link", { name: "Camera" }).click();
   await expect(page).toHaveURL(/\/usa\/midterms\/2026\/house$/);
   await expect(
-    page.getByRole("heading", { name: "Gare e pronostici" }),
+    page.getByRole("heading", { name: "Gare strutturali" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("Nessuna previsione pubblicata per questa camera."),
-  ).toBeVisible();
+  await expect(page.getByText(/registro dei run pubblicati/)).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Percorso" }).getByRole("link"),
   ).toHaveCount(4);
@@ -47,17 +43,26 @@ test("navigates the registered hierarchy and explains the empty state", async ({
     page.getByRole("heading", { name: "Sondaggi acquisiti" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Non sono ancora disponibili sondaggi acquisiti"),
+    page.getByRole("button", { name: "Applica filtri" }),
   ).toBeVisible();
   await views.getByRole("link", { name: "Notizie" }).click();
   await expect(
-    page.getByRole("heading", { name: "Notizie dalle fonti" }),
+    page.getByRole("heading", { name: "Documenti dalle fonti" }),
   ).toBeVisible();
   await views.getByRole("link", { name: "Fonti e metodo" }).click();
   await expect(
-    page.getByRole("heading", { name: "Provenienza e metodo" }),
+    page.getByRole("heading", { name: "Fonti e metodo", level: 1 }),
   ).toBeVisible();
   await expect(page.locator("main")).not.toContainText(/\d{1,3}%/);
+  await page.goto("/usa/midterms/2026/scenarios");
+  await expect(
+    page.getByRole("heading", { name: "Scenari", level: 1 }),
+  ).toBeVisible();
+  await expect(page.getByText(/snapshot sigillati/)).toBeVisible();
+  await page.goto("/usa/midterms/2026/races/house-al-01");
+  await expect(
+    page.getByRole("heading", { name: "Camera AL-01" }),
+  ).toBeVisible();
 });
 
 test("offers keyboard access to the content and edition views", async ({
@@ -87,7 +92,8 @@ test("does not expose future or legacy pages", async ({ request }) => {
     "/usa/midterms/2028",
     "/usa/midterms/2026/unknown",
     "/usa/midterms/2026/markets",
-    "/admin",
+    "/usa/midterms/2026/races/house-unknown",
+    "/usa/midterms/2026/polls/not-a-uuid",
   ]) {
     const response = await request.get(path);
     expect(response.status(), path).toBe(404);

@@ -31,6 +31,7 @@ export type SourceReference = Readonly<{
 
 export type PollRow = Readonly<{
   id: string;
+  historyHref?: string;
   pollster: string;
   subject: string;
   observedPeriod: string;

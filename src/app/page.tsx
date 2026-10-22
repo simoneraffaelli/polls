@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { catalog, canonicalUrl } from "@/composition/catalog";
 import { homePath } from "@/platform/catalog";
-import { EmptyState } from "@/ui/patterns/empty-state";
 import { LinkCard } from "@/ui/patterns/link-card";
 
 export const metadata: Metadata = {
@@ -35,7 +34,6 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-      <EmptyState />
     </>
   );
 }
