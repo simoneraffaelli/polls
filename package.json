@@ -21,15 +21,20 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate --name=change",
     "db:migrate": "tsx scripts/migrate-db.ts",
+    "queue:install": "tsx src/worker/install-queue.ts",
     "format": "prettier --write src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts",
     "format:check": "prettier --check src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
+    "fast-xml-parser": "5.11.2",
     "next": "16.4.2",
     "pg": "8.23.1",
+    "pg-boss": "12.38.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-is": "19.3.1",
+    "recharts": "3.10.1",
     "zod": "4.6.7"
   },
   "devDependencies": {

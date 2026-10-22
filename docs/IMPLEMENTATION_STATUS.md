@@ -18,8 +18,8 @@ Chiarimento dell'utente del 22 ottobre: l'orchestratore deve continuare fino al 
 |---|---|---|---|
 | Specifica e dipendenze | 0 | Perimetro, evidenze sulle fonti, ambiente e lacune dichiarate | In corso |
 | Fondazioni locali | 1 | Typecheck, lint, test mirati, build e avvio documentato; controlli container separati | Incremento locale verificato; collaudo container ancora da eseguire |
-| Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | In corso; contratti, persistenza e test di integrazione delegati e revisionati dall'orchestratore |
-| Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Non iniziato |
+| Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | Verificato in CI PostgreSQL 17 sul commit `284f095` |
+| Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Fase 3 in corso; adapter e fonti ancora da collegare |
 | Interfaccia e osservatorio | 5–6 | Accessibilità, provenienza, stati reali e autorizzazioni amministrative | Non iniziato |
 | Modello e scenari | 7–8 | Riproducibilità, valutazione temporale e limiti di calcolo | Non iniziato |
 | Collaudo e rilascio | 9–10 | Carico, ripristino, sicurezza e verifiche dell'ambiente finale | Non iniziato |
@@ -39,11 +39,13 @@ I blocchi non costituiscono nuove autorizzazioni al rilascio. La fase 5 può pro
 
 La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del catalogo, confini degli import, codifica delle credenziali del worker, esclusione dei file locali e avvio standalone. Le fondazioni applicative consentono di proseguire con la fase 2; il collaudo container resta una voce operativa aperta, rinviata secondo il chiarimento dell'utente, e non viene considerato superato.
 
-### Persistenza e contratti: verifiche in corso
+### Persistenza e contratti: incremento verificato
 
 Contratti Zod e dizionario dei dati, schema Drizzle, migrazione iniziale e repository di sondaggi/run sono implementati. La revisione ha richiesto ricevute idempotenti per acquisizione, sigilli contro inserimenti tardivi, riferimenti coerenti fra fonti/edizioni, preservazione delle date senza fuso e controllo del termine dopo l'attesa dei lock.
 
-Typecheck, lint, formattazione, controllo della struttura delle migrazioni e **23 test ordinari** superati localmente. Cinque test di integrazione PostgreSQL sono pronti per il servizio temporaneo della CI; non sono stati eseguiti su PostgreSQL locale. Il passaggio alla raccolta comune attende l'esito effettivo dei test transazionali, senza dipendere dal deployment sul VPS.
+Typecheck, lint, formattazione, controllo della struttura delle migrazioni e **23 test ordinari** superati. La [CI del commit `284f095`](https://github.com/simoneraffaelli/polls/actions/runs/39770292505) ha eseguito con successo anche **5 test su PostgreSQL 17 reale**, build worker/web e 2 test browser. La prima prova remota ha individuato una conversione errata dei timestamp nelle query dirette: corretta usando istanti numerici e confrontando il termine nel database. L'esclusione Git dei dati locali è stata limitata alla cartella radice per non nascondere i contratti applicativi.
+
+La fase 3 può proseguire. I test PostgreSQL usano schemi temporanei isolati in CI; non certificano ancora backup, reti o risorse del VPS.
 
 ## Fase 0: perimetro iniziale
 

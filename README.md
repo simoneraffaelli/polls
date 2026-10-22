@@ -18,7 +18,7 @@ Paesi, sezioni, edizioni e competizioni hanno identità distinte. Componenti, ra
 
 Next.js, React e TypeScript; worker Node.js nello stesso repository; PostgreSQL con Drizzle e pg-boss. Distribuzione tramite Docker Compose e Coolify sul server IONOS.
 
-Sono presenti web, catalogo, avvio separato del worker e persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Coda, autenticazione, raccolta e modello saranno collegati nelle rispettive fasi: non sono ancora operativi.
+Sono presenti web, catalogo, persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Il worker usa pg-boss e una pipeline con cursori transazionali, limiti HTTP e import controllato; le fonti vengono collegate soltanto tramite registrazioni esplicite. Autenticazione e modello saranno collegati nelle rispettive fasi.
 
 Le fonti iniziali previste includono Polymarket, VoteHub e RSS selezionati, con accesso gratuito e condizioni d'uso da verificare per i dati utilizzati. Sondaggi, previsioni del modello, prezzi dei mercati e tono delle notizie saranno presentati come misure distinte. L'IA esterna resta rinviata.
 
@@ -33,6 +33,7 @@ L'implementazione delle fondazioni locali è iniziata: catalogo tipizzato, navig
 - [Avanzamento e verifiche](docs/IMPLEMENTATION_STATUS.md): consegne, controlli eseguiti e dipendenze ancora aperte.
 - [Architettura iniziale](docs/ARCHITECTURE.md): responsabilità e confini del primo incremento.
 - [Dizionario dei dati](docs/DATA_DICTIONARY.md): identità, provenienza, unità, revisioni e contratti di pubblicazione.
+- [Raccolta e import](docs/COLLECTION.md): ricevute, cursori, quarantena e limiti delle acquisizioni.
 - [Fonti](docs/SOURCES.md): evidenze, condizioni e criteri di ammissione.
 - [Audit del riferimento](docs/REFERENCE_AUDIT.md): inventario del materiale esterno, consultato senza eseguirlo.
 - [Regole Midterms 2026](docs/MIDTERMS_RULES.md): seggi, calendario, caucus e limiti da mantenere espliciti nel catalogo e nel modello.
@@ -85,6 +86,8 @@ I test di integrazione sono separati: `pnpm test:db` richiede `TEST_DATABASE_URL
 
 Le migrazioni si applicano esplicitamente con `pnpm db:migrate`, usando `DATABASE_URL` oppure le variabili `PG*` riportate sotto. Il comando non carica automaticamente `.env` e non viene eseguito all'avvio del web. Le migrazioni versionate sono in `drizzle/`; il registro e un lock PostgreSQL impediscono esecuzioni concorrenti. Per generare una nuova migrazione usare `pnpm exec drizzle-kit generate --name=nome_descrittivo`; i trigger SQL aggiunti a mano richiedono revisione oltre al confronto dello schema Drizzle.
 
+Prima del worker eseguire anche `pnpm queue:install` con le variabili `PG*`: installa/aggiorna lo schema pg-boss e la definizione della coda una sola volta per rilascio. Il worker ordinario richiede database e coda già predisposti e non ne esegue le migrazioni. Il registro iniziale delle fonti è vuoto; l'avvio non attiva raccolte esterne.
+
 ## Web, worker e PostgreSQL in container
 
 La configurazione Compose è destinata allo sviluppo e al collaudo locale, non è un rilascio già verificato su Coolify. Occorre Docker con supporto Compose. Copiare `.env.example` in `.env` e sostituire i placeholder con valori esclusivamente locali prima dell'avvio; non versionare il file.
@@ -93,7 +96,7 @@ La configurazione Compose è destinata allo sviluppo e al collaudo locale, non �
 docker compose up --build
 ```
 
-Solo il web pubblica una porta sull'interfaccia locale `127.0.0.1:3000`; PostgreSQL resta nella rete dei container con un volume persistente. Il worker ha una build distinta e in questo incremento verifica soltanto la propria configurazione e gestisce avvio/arresto: non apre connessioni al database, non pianifica raccolte e non certifica la salute del servizio dati. Fuori da Compose sono disponibili `pnpm worker:build` e `pnpm worker:start`, con la configurazione richiesta dal worker fornita nell'ambiente del processo.
+Solo il web pubblica una porta sull'interfaccia locale `127.0.0.1:3000`; PostgreSQL resta nella rete dei container con un volume persistente. Il worker ha una build distinta e si collega al database e alla coda già predisposti; il registro delle fonti iniziale è vuoto. Nell'immagine worker l'installazione esplicita della coda usa `node dist-worker/worker/install-queue.js`, dopo le migrazioni. L'orchestrazione Compose del rilascio sarà completata nella fase operativa. Fuori da Compose sono disponibili `pnpm worker:build` e `pnpm worker:start`, con la configurazione richiesta dal worker fornita nell'ambiente del processo.
 
 | Variabile worker | Significato |
 |---|---|

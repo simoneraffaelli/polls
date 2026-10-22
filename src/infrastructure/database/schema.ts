@@ -192,7 +192,25 @@ export const collectionRuns = pgTable(
       .references(() => configuredSources.id),
     status: text("status").notNull(),
     cursorBefore: text("cursor_before"),
+    cursorGenerationBefore: bigint("cursor_generation_before", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
+    cycleId: uuid("cycle_id").notNull().defaultRandom(),
+    cycleStartedAt: instant("cycle_started_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    pageIndex: integer("page_index").notNull().default(0),
+    queueJobId: uuid("queue_job_id"),
+    retryNotBefore: instant("retry_not_before"),
+    attemptCount: integer("attempt_count").notNull().default(0),
     cursorAfter: text("cursor_after"),
+    hasMore: boolean("has_more"),
+    pageHash: text("page_hash"),
+    pageAcquiredAt: instant("page_acquired_at"),
+    savedCount: integer("saved_count"),
+    quarantinedCount: integer("quarantined_count"),
     startedAt: instant("started_at")
       .notNull()
       .default(sql`clock_timestamp()`),
@@ -215,6 +233,9 @@ export const sourceCursors = pgTable(
       .primaryKey()
       .references(() => configuredSources.id),
     cursor: text("cursor"),
+    generation: bigint("generation", { mode: "number" }).notNull().default(0),
+    notBefore: instant("not_before"),
+    blockedReasonCode: text("blocked_reason_code"),
     lastRunId: uuid("last_run_id"),
     updatedAt: instant("updated_at")
       .notNull()
@@ -226,6 +247,27 @@ export const sourceCursors = pgTable(
       columns: [table.lastRunId, table.sourceId],
       foreignColumns: [collectionRuns.id, collectionRuns.sourceId],
     }),
+  ],
+);
+
+export const quarantinedObservations = pgTable(
+  "quarantined_observations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull(),
+    sourceId: uuid("source_id").notNull(),
+    externalId: text("external_id"),
+    contentHash: text("content_hash").notNull(),
+    reasonCode: text("reason_code").notNull(),
+    acquiredAt: instant("acquired_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "quarantine_run_source_fk",
+      columns: [table.runId, table.sourceId],
+      foreignColumns: [collectionRuns.id, collectionRuns.sourceId],
+    }),
+    check("quarantine_hash_check", sql`length(${table.contentHash}) = 64`),
   ],
 );
 

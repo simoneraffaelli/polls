@@ -1,26 +1,60 @@
 import { readWorkerConfig } from "../infrastructure/config/worker-env";
+import { createDatabase } from "../infrastructure/database/client";
+import {
+  reconcileCollectionRuns,
+  registerPollCollectionWorker,
+  startCollectionQueue,
+  syncPollCollectionSchedules,
+  type PollSourceRegistry,
+} from "../infrastructure/jobs/collection-queue";
 
-function main(): void {
-  // La connessione, la coda e le raccolte arrivano nelle fasi successive.
-  // La validazione è locale al processo: la build web non richiede segreti PostgreSQL.
-  readWorkerConfig(process.env);
-  console.info("Worker avviato; nessuna raccolta configurata in questa fase.");
+// Sources are enabled only after their adapter and rights checks are configured.
+const sources: PollSourceRegistry = new Map();
 
-  const keepAlive = setInterval(() => {}, 60_000);
-  const shutdown = () => {
-    clearInterval(keepAlive);
-    console.info("Worker arrestato.");
+async function main(): Promise<void> {
+  const config = readWorkerConfig(process.env);
+  const database = createDatabase({
+    connectionString: config.databaseUrl,
+    max: 3,
+  });
+  let boss: Awaited<ReturnType<typeof startCollectionQueue>> | undefined;
+  try {
+    boss = await startCollectionQueue(config.databaseUrl);
+    await syncPollCollectionSchedules(boss, sources);
+    await reconcileCollectionRuns(database.db, boss);
+    await registerPollCollectionWorker(database.db, boss, sources);
+    console.info("Worker ready; active poll sources:", sources.size);
+  } catch {
+    if (boss) await boss.stop({ graceful: true, timeout: 30_000 });
+    await database.close();
+    throw new Error("Worker startup failed");
+  }
+
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    try {
+      await boss.stop({ graceful: true, timeout: 30_000 });
+      await database.close();
+      console.info("Worker stopped.");
+    } catch {
+      console.error("Worker shutdown failed.");
+      process.exitCode = 1;
+    }
   };
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", () => {
+    void shutdown();
+  });
+  process.once("SIGTERM", () => {
+    void shutdown();
+  });
 }
 
-try {
-  main();
-} catch {
-  // Non riportare gli input di validazione: le variabili PostgreSQL contengono credenziali.
+main().catch(() => {
+  // Database URLs and source payloads never appear in startup logs.
   console.error(
-    "Configurazione worker non valida: controllare le variabili PostgreSQL.",
+    "Worker startup failed; check configuration, database migrations and queue installation.",
   );
   process.exitCode = 1;
-}
+});

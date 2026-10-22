@@ -5,7 +5,7 @@ node_modules
 next-env.d.ts
 dist-worker
 .tools
-data
+/data
 backups
 logs
 .env

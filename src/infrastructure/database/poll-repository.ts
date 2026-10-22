@@ -17,6 +17,9 @@ const associationSchema = z.object({
   scope: editionScopeSchema,
   raceId: z.uuid().nullable().default(null),
 });
+type DatabaseTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];
 
 function publicationFields(
   value: z.infer<
@@ -43,12 +46,29 @@ export async function recordPollRevision(
   revisionNo: number;
   created: boolean;
 }> {
+  return db.transaction((tx) =>
+    recordPollRevisionInTransaction(tx, observation, association),
+  );
+}
+
+/** Intended for a larger page transaction that also advances the source cursor. */
+export async function recordPollRevisionInTransaction(
+  tx: DatabaseTransaction,
+  observation: unknown,
+  association: unknown,
+): Promise<{
+  pollId: string;
+  revisionId: string;
+  linkId: string;
+  revisionNo: number;
+  created: boolean;
+}> {
   const poll = pollObservationSchema.parse(observation);
   const link = associationSchema.parse(association);
   const observed = poll.provenance.observed;
   if (observed.kind !== "date_period")
     throw new Error("Poll fieldwork period required");
-  return db.transaction(async (tx) => {
+  {
     const [edition] = await tx
       .select({ id: editions.id })
       .from(editions)
@@ -246,5 +266,5 @@ export async function recordPollRevision(
       revisionNo,
       created: createRevision,
     };
-  });
+  }
 }
