@@ -88,10 +88,9 @@ export async function createCompletedForecastRun(
     if (!question)
       throw new Error("Forecast question does not belong to edition scope");
     const clock = await tx.execute(
-      sql`SELECT clock_timestamp() AS captured_at`,
+      sql`SELECT EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS epoch_ms`,
     );
-    const createdAt = clock.rows[0]?.captured_at as Date | undefined;
-    if (!createdAt) throw new Error("Database clock unavailable");
+    const createdAt = dateFromEpochMilliseconds(clock.rows[0]?.epoch_ms);
 
     const [run] = await tx
       .insert(forecastRuns)
@@ -151,6 +150,15 @@ const publicationInputSchema = z.object({
   runId: z.uuid(),
 });
 
+function dateFromEpochMilliseconds(value: unknown): Date {
+  const milliseconds = Number(value);
+  if (!Number.isFinite(milliseconds))
+    throw new Error("Invalid database instant");
+  const date = new Date(milliseconds);
+  if (Number.isNaN(date.getTime())) throw new Error("Invalid database instant");
+  return date;
+}
+
 /** The database trigger locks the question, checks its current cutoff and updates the pointer atomically. */
 export async function publishForecast(
   db: Database,
@@ -169,7 +177,11 @@ export async function publishForecast(
     INSERT INTO publication_history (question_id, edition_id, run_id)
     SELECT question_id, edition_id, id FROM forecast_runs
     WHERE id = ${runId} AND question_id = ${questionId}
-    RETURNING id, run_id, run_sequence, input_as_of, published_at, cutoff_at_publication, cutoff_version
+    RETURNING id, run_id, run_sequence,
+      EXTRACT(EPOCH FROM input_as_of) * 1000 AS input_as_of_epoch_ms,
+      EXTRACT(EPOCH FROM published_at) * 1000 AS published_at_epoch_ms,
+      EXTRACT(EPOCH FROM cutoff_at_publication) * 1000 AS cutoff_epoch_ms,
+      cutoff_version
   `);
   const row = result.rows[0];
   if (!row) throw new Error("Unknown forecast run for question");
@@ -177,9 +189,9 @@ export async function publishForecast(
     publicationId: String(row.id),
     runId: String(row.run_id),
     runSequence: Number(row.run_sequence),
-    inputAsOf: row.input_as_of as Date,
-    publishedAt: row.published_at as Date,
-    cutoffAtPublication: row.cutoff_at_publication as Date,
+    inputAsOf: dateFromEpochMilliseconds(row.input_as_of_epoch_ms),
+    publishedAt: dateFromEpochMilliseconds(row.published_at_epoch_ms),
+    cutoffAtPublication: dateFromEpochMilliseconds(row.cutoff_epoch_ms),
     cutoffVersion: Number(row.cutoff_version),
   };
 }
@@ -190,16 +202,15 @@ export async function readCurrentPublication(
 ): Promise<ForecastReadState> {
   const id = z.uuid().parse(questionId);
   const result = await db.execute(sql`
-    SELECT q.stored_state, q.cutoff_at, c.run_id, clock_timestamp() AS database_now
+    SELECT q.stored_state, c.run_id,
+      CASE WHEN q.stored_state <> 'open' OR clock_timestamp() >= q.cutoff_at THEN 1 ELSE 0 END AS is_closed
     FROM forecast_questions q
     LEFT JOIN current_publications c ON c.question_id = q.id
     WHERE q.id = ${id}
   `);
   const row = result.rows[0];
   if (!row) throw new Error("Unknown forecast question");
-  const closed =
-    row.stored_state !== "open" ||
-    (row.database_now as Date) >= (row.cutoff_at as Date);
+  const closed = Number(row.is_closed) === 1;
   const runId = row.run_id as string | null;
   if (closed) {
     const archived = row.stored_state === "archived";

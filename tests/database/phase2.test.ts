@@ -467,6 +467,11 @@ describe("phase 2 PostgreSQL invariants", () => {
       kind: "closed_without_run",
       archived: false,
     });
+    const [expiredQuestion] = await database.db
+      .select({ storedState: forecastQuestions.storedState })
+      .from(forecastQuestions)
+      .where(eq(forecastQuestions.id, emptyQuestionId));
+    expect(expiredQuestion.storedState).toBe("closed");
   });
 
   it("rechecks the cutoff after waiting for the question lock", async () => {
