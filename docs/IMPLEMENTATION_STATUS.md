@@ -10,13 +10,15 @@ La preferenza per l'orchestratore è Astra High, da selezionare nella chat; ques
 
 L'utente autorizza commit e push degli incrementi verificati. Il branch di questo incremento è `codex/implementation-foundations`; le PR saranno usate quando serve revisione umana o quando il contesto lo richiede. Il push di un branch di sviluppo non è un'autorizzazione al rilascio in produzione.
 
+Chiarimento dell'utente del 22 ottobre: l'orchestratore deve continuare fino al completamento del lavoro implementabile, senza una revisione umana a ogni fase. Commit e resoconti sono tappe, non punti di arresto. Test di dominio, integrazione e browser accompagnano lo sviluppo; il collaudo operativo e il rilascio sull'ambiente finale avverranno quando l'utente eseguirà il deployment. Le relative evidenze e la validazione statistica non dimostrata rimangono distinte dal completamento del codice.
+
 ## Consegne e verifiche
 
 | Blocco | Fasi del piano | Verifica necessaria | Stato |
 |---|---|---|---|
 | Specifica e dipendenze | 0 | Perimetro, evidenze sulle fonti, ambiente e lacune dichiarate | In corso |
 | Fondazioni locali | 1 | Typecheck, lint, test mirati, build e avvio documentato; controlli container separati | Incremento locale verificato; collaudo container ancora da eseguire |
-| Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | Non iniziato |
+| Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | In corso; contratti, persistenza e test di integrazione delegati e revisionati dall'orchestratore |
 | Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Non iniziato |
 | Interfaccia e osservatorio | 5–6 | Accessibilità, provenienza, stati reali e autorizzazioni amministrative | Non iniziato |
 | Modello e scenari | 7–8 | Riproducibilità, valutazione temporale e limiti di calcolo | Non iniziato |
@@ -35,7 +37,13 @@ I blocchi non costituiscono nuove autorizzazioni al rilascio. La fase 5 può pro
 - **CI Linux superata** sul commit applicativo `ce0e7ca`: installazione da clone pulito con lockfile, typecheck, lint, formattazione, 14 test, build worker/web e 2 test browser. [Esecuzione GitHub Actions](https://github.com/simoneraffaelli/polls/actions/runs/39754611289).
 - Dockerfile e Compose sono predisposti, ma i container non sono ancora stati eseguiti. PostgreSQL non è stato avviato né usato dai test di questo incremento; la CI applicativa non ne certifica il funzionamento.
 
-La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del catalogo, confini degli import, codifica delle credenziali del worker, esclusione dei file locali e avvio standalone. La fase 1 nel suo insieme rimane aperta fino al collaudo dell'ambiente container; questo incremento verifica le fondazioni applicative indipendenti da quel collaudo.
+La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del catalogo, confini degli import, codifica delle credenziali del worker, esclusione dei file locali e avvio standalone. Le fondazioni applicative consentono di proseguire con la fase 2; il collaudo container resta una voce operativa aperta, rinviata secondo il chiarimento dell'utente, e non viene considerato superato.
+
+### Persistenza e contratti: verifiche in corso
+
+Contratti Zod e dizionario dei dati, schema Drizzle, migrazione iniziale e repository di sondaggi/run sono implementati. La revisione ha richiesto ricevute idempotenti per acquisizione, sigilli contro inserimenti tardivi, riferimenti coerenti fra fonti/edizioni, preservazione delle date senza fuso e controllo del termine dopo l'attesa dei lock.
+
+Typecheck, lint, formattazione, controllo della struttura delle migrazioni e **23 test ordinari** superati localmente. Cinque test di integrazione PostgreSQL sono pronti per il servizio temporaneo della CI; non sono stati eseguiti su PostgreSQL locale. Il passaggio alla raccolta comune attende l'esito effettivo dei test transazionali, senza dipendere dal deployment sul VPS.
 
 ## Fase 0: perimetro iniziale
 
@@ -44,7 +52,7 @@ La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del 
 - Domande previsionali candidate: controllo di Camera e Senato nell'edizione 2026. Le regole su seggi, indipendenti, vacanze e risoluzione devono essere formalizzate prima dell'attivazione del modello; le singole gare saranno catalogate nella fase 4 da fonti verificate.
 - Termine preliminare conservativo per queste domande: `2026-11-03T00:00:00Z`, equivalente al 2 novembre 2026 alle 19:00 in `America/New_York`. È una scelta di prodotto precedente alla giornata elettorale, non l'orario ufficiale di chiusura dei seggi. Nessuna domanda previsionale viene attivata in questo incremento. Riferimento alla data elettorale: [FEC](https://www.fec.gov/help-candidates-and-committees/dates-and-deadlines/2026-reporting-dates/electioneering-communications-periods-general-election-2026/).
 - Nessun impegno di pubblicazione prima del voto. L'edizione deve supportare anche un primo rilascio successivo, senza inventare uno storico previsionale.
-- La [matrice delle fonti](SOURCES.md) distingue cataloghi disponibili, payload effettivamente verificati e condizioni ancora da chiarire; nessuna fonte è attiva. Il catalogo VoteHub mostra categorie di gare 2026, ma quantità e profondità storica dei sondaggi restano da misurare. Dati non sufficienti o condizioni non chiarite impediscono l'attivazione di quella fonte, non il lavoro locale indipendente dai provider.
+- La [matrice delle fonti](SOURCES.md) distingue cataloghi, payload verificati e condizioni ancora da chiarire; nessuna raccolta continuativa è attiva. Un campione live VoteHub ha restituito 2 record generic ballot, 5 Ohio Senato e 4 Michigan Senato; due gare Camera non hanno restituito dati. È disponibile una fixture minima attribuita sotto la licenza CC BY 4.0 dichiarata dal provider. Questi campioni consentono l'implementazione del relativo adapter, senza dimostrare copertura nazionale o profondità storica per il modello.
 - L'[audit del riferimento](REFERENCE_AUDIT.md) ha identificato lo ZIP a un commit preciso ed esaminato indice e testi selezionati senza eseguirli. Il materiale fornisce campi e casi limite, non dati già ammessi alla pubblicazione in Polls.
 
 ## Ambiente e dipendenze ancora aperte
@@ -62,4 +70,4 @@ La revisione ha corretto riferimenti contraffatti o incoerenti negli helper del 
 | Collegamento Coolify | GitHub App con webhook, indicata dall'utente; integrazione non configurata in questa fase |
 | Build e registro | Luogo delle build e quote da confermare prima del rilascio; con 4 GB RAM occorre misurare il margine effettivo e valutare build esterna |
 
-La fase 0 resta aperta per le voci mancanti. Possono avanzare soltanto le fondazioni locali che non dipendono da provider, segreti o capacità del VPS, dopo revisione dell'orchestratore. Questa limitazione rende esplicito il lavoro indipendente consentito dal piano, senza considerare superati i requisiti delle fasi successive.
+La fase 0 resta aperta per le voci mancanti. Prosegue il lavoro implementabile senza credenziali di produzione o accesso al VPS, con test isolati e revisione dell'orchestratore. I provider non ancora ammessi rimangono disabilitati; nessun dato o risultato di validazione viene inventato per aggirare una dipendenza mancante.

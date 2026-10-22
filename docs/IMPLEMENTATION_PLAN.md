@@ -493,6 +493,8 @@ Le visualizzazioni specifiche, come mappa dei collegi o composizione delle camer
 
 Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico; attività indipendenti possono procedere insieme senza saltare i criteri di accettazione.
 
+**Modalità esecutiva chiarita dall'utente il 22 ottobre 2026:** lo sviluppo procede autonomamente attraverso le fasi, con delega, revisione dell'orchestratore, test automatici e commit intermedi, senza approvazioni umane ordinarie. La parte operativa delle fasi 9–10 (ambiente finale, risorse, backup esterno, ripristino e apertura pubblica) sarà eseguita in occasione del deployment dell'utente. Prepararne configurazioni, strumenti e procedure durante lo sviluppo; non attendere l'accesso al VPS per implementare funzioni verificabili in isolamento. I criteri operativi sotto riportati restano requisiti del rilascio, non vengono dichiarati completati dalla sola consegna del codice. La validazione statistica richiede comunque dati ed evidenze adeguati.
+
 ### Fase 0 — Specifica operativa e verifica delle dipendenze
 
 **Attività**

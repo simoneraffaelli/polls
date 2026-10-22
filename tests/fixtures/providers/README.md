@@ -1,0 +1,3 @@
+# Provenienza delle fixture dei provider
+
+`votehub-generic-ballot.json` contiene **un solo record** della risposta pubblica `GET https://api.votehub.com/polls?poll_type=generic-ballot&subject=2026&from_date=2026-10-01`, acquisita il 22 ottobre 2026. Dati VoteHub, [API beta](https://votehub.com/polls/api/), dichiarati [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). La risposta originale conteneva due record; la fixture è stata ridotta a uno e formattata, senza cambiare i valori. Fonte primaria indicata nel campo `url` del record. Non è una serie completa né una conferma indipendente del sondaggio.

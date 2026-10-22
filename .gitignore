@@ -18,7 +18,7 @@ test-results/
 *.key
 
 # Runtime data and diagnostics
-data/
+/data/
 backups/
 logs/
 *.log

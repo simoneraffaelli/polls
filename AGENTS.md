@@ -17,6 +17,8 @@ Il piano è la specifica consolidata; le successive istruzioni esplicite dell'ut
 - Delegare incarichi circoscritti con file di competenza, criteri di accettazione e verifiche esplicite. Usare Medium per attività ben delimitate e High per implementazione o ragionamento complesso.
 - L'orchestratore revisiona ogni consegna, richiede le correzioni necessarie e aggiorna `docs/IMPLEMENTATION_STATUS.md` prima di accettare il passaggio di fase.
 - Creare commit e push per incrementi verificati, come autorizzato dall'utente. Usare branch di lavoro; ricorrere alle PR quando serve revisione umana o quando il contesto lo giustifica. Un push non autorizza da solo un deployment.
+- Proseguire autonomamente fra le fasi implementabili, senza fermarsi dopo ogni commit o richiedere una revisione umana ordinaria. I passaggi di fase sono verificati dall'orchestratore; i test automatici restano parte dello sviluppo.
+- Il collaudo operativo sull'ambiente di destinazione e il rilascio sono rinviati al deployment che eseguirà l'utente. Preparare codice, configurazioni e procedure e registrare le prove ancora da eseguire, senza dichiararle superate. La mancanza del VPS o di Docker locale non blocca sviluppo e test di integrazione su PostgreSQL isolato in CI.
 - Ridurre il consumo di token con contesto mirato, agenti riutilizzati e controlli proporzionati. Evitare modifiche concorrenti agli stessi file e revisioni duplicate senza un rischio concreto.
 - Per il repository pubblico privilegiare codice leggibile, nomi chiari e contratti piccoli; mai pubblicare segreti, inventari privati o dati di produzione nei rapporti di verifica.
 

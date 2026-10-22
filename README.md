@@ -18,7 +18,7 @@ Paesi, sezioni, edizioni e competizioni hanno identità distinte. Componenti, ra
 
 Next.js, React e TypeScript; worker Node.js nello stesso repository; PostgreSQL con Drizzle e pg-boss. Distribuzione tramite Docker Compose e Coolify sul server IONOS.
 
-Il primo incremento contiene web, catalogo e avvio separato del worker. Persistenza applicativa, Drizzle, pg-boss, autenticazione e raccolta saranno introdotti nelle rispettive fasi: non sono ancora operativi.
+Sono presenti web, catalogo, avvio separato del worker e persistenza PostgreSQL/Drizzle con migrazioni, revisioni dei sondaggi e pubblicazione atomica dei run. Coda, autenticazione, raccolta e modello saranno collegati nelle rispettive fasi: non sono ancora operativi.
 
 Le fonti iniziali previste includono Polymarket, VoteHub e RSS selezionati, con accesso gratuito e condizioni d'uso da verificare per i dati utilizzati. Sondaggi, previsioni del modello, prezzi dei mercati e tono delle notizie saranno presentati come misure distinte. L'IA esterna resta rinviata.
 
@@ -32,10 +32,15 @@ L'implementazione delle fondazioni locali è iniziata: catalogo tipizzato, navig
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
 - [Avanzamento e verifiche](docs/IMPLEMENTATION_STATUS.md): consegne, controlli eseguiti e dipendenze ancora aperte.
 - [Architettura iniziale](docs/ARCHITECTURE.md): responsabilità e confini del primo incremento.
+- [Dizionario dei dati](docs/DATA_DICTIONARY.md): identità, provenienza, unità, revisioni e contratti di pubblicazione.
 - [Fonti](docs/SOURCES.md): evidenze, condizioni e criteri di ammissione.
 - [Audit del riferimento](docs/REFERENCE_AUDIT.md): inventario del materiale esterno, consultato senza eseguirlo.
+- [Regole Midterms 2026](docs/MIDTERMS_RULES.md): seggi, calendario, caucus e limiti da mantenere espliciti nel catalogo e nel modello.
+- [Dataset storici](docs/HISTORICAL_DATA.md): fonti riusabili e limiti per la valutazione retrospettiva.
 
 La fase 0 resta aperta sulle verifiche dei provider e dell'ambiente di destinazione. Le fondazioni locali procedono per le parti indipendenti da quelle verifiche; il dettaglio dei controlli ancora necessari è nel documento di avanzamento.
+
+Lo sviluppo prosegue per fasi revisionate dall'orchestratore, con test e commit intermedi, senza approvazione umana a ogni passaggio. Il collaudo operativo sul server e il rilascio saranno eseguiti in occasione del deployment dell'utente; la loro preparazione fa parte del lavoro, mentre il loro esito resta da verificare nell'ambiente reale.
 
 Il primo traguardo previsto è l'**osservatorio completo** nel perimetro verificato; **modello sperimentale disponibile** e **modello validato** sono traguardi distinti. Un modello sperimentale non completa l'obiettivo della validazione né la prima versione completa del prodotto.
 
@@ -75,6 +80,10 @@ pnpm test:e2e
 ```
 
 I test ordinari non chiamano provider esterni. La prima installazione delle dipendenze e del browser richiede rete. I test del catalogo verificano isolamento tra paesi, riferimenti e rotte incoerenti, collisioni e mutazioni della configurazione; i test del browser coprono la navigazione essenziale, i metadati e le rotte escluse. Lo stato delle esecuzioni locali e della CI è riportato separatamente nel documento di avanzamento.
+
+I test di integrazione sono separati: `pnpm test:db` richiede `TEST_DATABASE_URL` verso un database PostgreSQL temporaneo dedicato, con `test` come segmento del nome. Il runner crea due schemi casuali, applica le migrazioni e rimuove soltanto quegli schemi; non usa `DATABASE_URL` come ripiego. La CI dispone del proprio servizio PostgreSQL 17. I test verificano rettifiche e retry, riferimenti fra edizioni, immutabilità degli input e termine/ordine delle pubblicazioni.
+
+Le migrazioni si applicano esplicitamente con `pnpm db:migrate`, usando `DATABASE_URL` oppure le variabili `PG*` riportate sotto. Il comando non carica automaticamente `.env` e non viene eseguito all'avvio del web. Le migrazioni versionate sono in `drizzle/`; il registro e un lock PostgreSQL impediscono esecuzioni concorrenti. Per generare una nuova migrazione usare `pnpm exec drizzle-kit generate --name=nome_descrittivo`; i trigger SQL aggiunti a mano richiedono revisione oltre al confronto dello schema Drizzle.
 
 ## Web, worker e PostgreSQL in container
 
