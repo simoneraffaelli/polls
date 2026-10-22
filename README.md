@@ -20,6 +20,8 @@ Next.js, React e TypeScript; worker Node.js nello stesso repository; PostgreSQL 
 
 Le fonti iniziali previste includono Polymarket, VoteHub e RSS selezionati, con accesso gratuito e condizioni d'uso da verificare per i dati utilizzati. Sondaggi, previsioni del modello, prezzi dei mercati e tono delle notizie saranno presentati come misure distinte. L'IA esterna resta rinviata.
 
+La copertura di VoteHub per singole gare e archivi storici non è ancora dimostrata: il perimetro dipenderà dalla verifica delle fonti. Il confronto con i mercati userà una misura di prezzo uniforme, con qualità e freschezza esplicite, secondo il piano.
+
 ## Stato e documentazione
 
 Il repository contiene le fondamenta documentali; **l'applicazione non è ancora implementata o distribuita**. Non sono ancora disponibili comandi di avvio o test applicativi.
@@ -28,3 +30,7 @@ Il repository contiene le fondamenta documentali; **l'applicazione non è ancora
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
 
 Il primo passo è la fase 0 del piano: definizione operativa, verifica delle fonti e dell'ambiente di destinazione.
+
+Il primo traguardo previsto è l'**osservatorio completo** nel perimetro verificato; **modello sperimentale disponibile** e **modello validato** sono traguardi distinti. Un modello sperimentale non completa l'obiettivo della validazione né la prima versione completa del prodotto.
+
+Il piano del 22 ottobre 2026 non garantisce un rilascio completo prima del voto del 3 novembre: assume che l'edizione 2026 possa essere pubblicata come osservatorio e archivio dopo il voto. Un eventuale rilascio ridotto precedente va valutato nella fase 0. Alla scadenza di ciascuna domanda si fermeranno le pubblicazioni previsionali e si conserverà l'ultimo run realmente pubblicato; eventuali ricostruzioni successive saranno dichiarate come tali.

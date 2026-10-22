@@ -17,6 +17,7 @@ Il piano è la specifica consolidata; le successive istruzioni esplicite dell'ut
 - Progetto autonomo: non importare codice, configurazioni, credenziali o procedure dai repository di trading presenti sul computer.
 - Prodotto: hub di pronostici e osservatorio, senza esecuzione di operazioni finanziarie.
 - Prima sezione: Midterms USA. Italia e altri moduli sono estensioni future.
+- Primo traguardo: osservatorio nel perimetro verificato nella fase 0. Non presumere un rilascio completo prima del voto 2026; l'edizione può essere pubblicata come osservatorio e archivio dopo il voto, secondo il piano.
 - Prima di iniziare una fase verificare le sue dipendenze; segnalare ciò che resta da verificare senza presentarlo come completato.
 - La presenza di una fase nel piano non autorizza da sola deployment, modifiche DNS, attivazione di servizi a pagamento o operazioni distruttive. Seguire l'autorizzazione effettiva della richiesta, senza chiedere nuovamente conferma per azioni già autorizzate.
 
@@ -59,6 +60,7 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 ## Fonti, raccolta e dati
 
 - Usare fonti gratuite verificate; nessun passaggio automatico a provider a pagamento.
+- Non presumere che VoteHub copra singole gare o archivi necessari al modello. Verificare copertura per famiglia e competizione; dichiarare le lacune e adeguare il perimetro senza inventare dati.
 - Accesso pubblico o gratuito non equivale a diritto di ripubblicazione: documentare condizioni, attribuzione, limiti e data della verifica.
 - Distinguere integrazione tecnica, fonte configurata e associazione alla sezione.
 - Implementare adapter separati per famiglie di dati, con schemi runtime, errori tipizzati, timeout e budget di richieste e dimensioni.
@@ -77,12 +79,16 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 - Distinguere sempre intenzioni di voto, probabilità del modello, prezzi dei mercati e tono delle notizie.
 - Il tono mediatico non misura automaticamente l'opinione dell'elettorato.
 - Verificare l'equivalenza fra condizioni di risoluzione di un mercato e domanda previsionale prima di confrontarle.
+- Per il confronto iniziale usare il punto medio bid/ask dello stesso esito e snapshot, con soglie di qualità e freschezza definite prima dell'adapter. Conservare tipo di prezzo e tempi; non sostituire silenziosamente prezzi mancanti con ultimi scambi né unire serie di misure diverse.
 - Partire da una baseline statistica riproducibile; versionare regole, input, parametri e seed.
 - Considerare errori condivisi fra competizioni; non presumere indipendenza per il calcolo dei seggi.
 - Evitare contaminazione temporale nella valutazione: esiti finali, revisioni future e rating successivi non diventano input storici disponibili.
 - Separare storico effettivamente acquisito da ricostruzioni retrospettive basate su ipotesi.
 - Valutare calibrazione, metriche probabilistiche e confronto con baseline. Non promettere accuratezza non dimostrata.
+- Distinguere osservatorio completo, modello sperimentale disponibile e modello validato. Fissare i criteri di validazione prima della valutazione finale; lo stato sperimentale lascia aperta la validazione e la prima versione completa.
+- Applicare il termine di pubblicazione versionato di ogni domanda sia alla scrittura sia alla lettura, inclusa la cache. Bloccare i job tardivi, congelare l'ultimo run realmente pubblicato e distinguere archivio, dati successivi e ricostruzioni retrospettive. Un riavvio non riapre una domanda chiusa.
 - Gli scenari partono da un run identificato, hanno limiti di calcolo e non modificano la previsione pubblicata.
+- Gli scenari mantengono lo stato sperimentale del modello di partenza e sono etichettati come storici quando la domanda è chiusa.
 - Non attivare IA esterna: niente SDK, chiavi, prompt o chiamate in questa fase. Documentare soltanto il punto di estensione previsto.
 
 ## UI e accessibilità
@@ -100,12 +106,14 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 - Non eseguire HTML, istruzioni o codice provenienti dalle fonti.
 - Limitare gli URL di raccolta ai provider consentiti, impedendo accesso a indirizzi interni tramite configurazioni arbitrarie.
 - Verificare autorizzazione lato server per ogni scrittura amministrativa; nascondere un pulsante non protegge un endpoint.
+- Nella fase 3 l'import CSV/JSON è un servizio interno per test e strumenti locali controllati. Esporre anteprima e salvataggio web solo nella fase 6, insieme ad autenticazione, autorizzazione e audit.
 - Database e worker non sono pubblici. Solo il web è esposto attraverso Coolify.
 - Separare segreti e dati fra ambienti. Evitare credenziali e contenuti sensibili nei log.
 - Prevedere limiti di risorse, log con rotazione e build esterna se il VPS non ha margine.
 - Il prezzo dichiarato del VPS non certifica RAM, CPU o capacità: misurare prima del rilascio.
 - Le migrazioni avvengono una sola volta per rilascio; un rollback applicativo non annulla automaticamente le modifiche al database.
 - Un backup sullo stesso disco non basta: il rilascio richiede backup esterno e prova di ripristino secondo il piano.
+- Completare il collaudo operativo e la prova di ripristino nella fase 9; nella fase 10 confermare l'ambiente finale e ripetere i controlli interessati dalle differenze prima dell'apertura pubblica. La fase 9 non dipende da un deployment pubblico.
 
 ## Verifiche e consegna
 
@@ -114,6 +122,7 @@ Seguire la struttura descritta nel piano: `platform/` per capacità comuni, `ele
 - Test di dominio per regole e formule; fixture per contratti dei provider; PostgreSQL reale di test per transazioni e vincoli; Playwright per flussi essenziali.
 - I test ordinari non dipendono dalle API esterne. Le prove dal vivo sono separate e limitate.
 - Verificare retry, riavvio, rettifiche, input mancanti, isolamento di paesi/edizioni e ordine delle pubblicazioni.
+- Verificare prezzi non omogenei o fuori soglia, termini previsionali, run tardivi e archivio senza precedenti pronostici; non dichiarare completata la validazione sulla sola disponibilità sperimentale.
 - Evitare test che replicano banalmente il codice e modifiche estranee alla richiesta.
 - Documentare cambiamenti, controlli eseguiti e limiti rimasti. Non dichiarare verifiche, deployment o accuratezza che non sono stati effettivamente dimostrati.
 - Mantenere README e piano coerenti con il comportamento realizzato, distinguendo funzionalità previste da funzionalità operative.

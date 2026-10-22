@@ -20,7 +20,7 @@ La piattaforma deve poter ospitare in futuro elezioni italiane e altri eventi se
 
 Decisioni consolidate:
 
-- Un nuovo repository indipendente dai progetti di trading esistenti.
+- Il repository esistente rimane indipendente dai progetti di trading presenti sul computer.
 - Gerarchia dell'hub: paese → sezione → edizione → competizione; `/usa` e `/italy` sono pagine di paese allo stesso livello.
 - Next.js con App Router, React e TypeScript.
 - TypeScript anche per raccolta dati, elaborazioni e modello previsionale: nessun servizio Python.
@@ -52,6 +52,10 @@ L'archivio `USA_Midterm_Update.zip` costituisce materiale di riferimento per fon
 9. Pannello amministrativo per fonti, raccolte, errori, associazioni e pubblicazioni.
 10. Funzionamento continuativo con aggiornamenti automatici, backup e procedure di ripristino.
 
+Il primo traguardo è l'osservatorio, rilasciabile autonomamente con il perimetro verificato nella fase 0. Modello sperimentale disponibile e modello validato sono traguardi distinti, definiti nel paragrafo 19. Le funzioni previsionali e gli scenari vengono resi disponibili solo quando esistono i rispettivi risultati e controlli.
+
+Alla data del piano, 22 ottobre 2026, mancano 12 giorni alle elezioni generali del 3 novembre 2026 ([calendario FEC](https://www.fec.gov/help-candidates-and-committees/dates-and-deadlines/2026-reporting-dates/electioneering-communications-periods-general-election-2026/)). La stima di 39–66 giornate-persona per uno sviluppatore non sostiene il completamento della prima versione prima del voto. La pianificazione assume quindi che l'edizione 2026 possa essere pubblicata come osservatorio e archivio dopo il voto; un eventuale rilascio ridotto precedente richiede una verifica di fattibilità nella fase 0 e tutti i controlli delle fasi 9 e 10. Le ricostruzioni successive non saranno presentate come pronostici pubblicati prima dell'evento.
+
 ### 2.2 Estensioni successive
 
 - Pagina paese Italia con sezioni elettorali dotate di proprie regole e fonti.
@@ -64,7 +68,7 @@ L'archivio `USA_Midterm_Update.zip` costituisce materiale di riferimento per fon
 
 | Grandezza | Significato | Presentazione |
 |---|---|---|
-| Sondaggio | Stima di intenzioni di voto, approvazione o altra opinione su una popolazione | Percentuale, domanda, campione, una preperiodo e fonte |
+| Sondaggio | Stima di intenzioni di voto, approvazione o altra opinione su una popolazione | Percentuale, domanda, campione, periodo e fonte |
 | Previsione | Probabilità stimata dal nostro modello per un esito definito | Probabilità, incertezza, versione e data |
 | Mercato | Prezzo di un contratto interpretato come probabilità implicita | Fonte, condizioni del contratto, liquidità e aggiornamento |
 | Tono delle notizie | Caratteristica dei contenuti raccolti | Copertura, metodo e limiti del campione |
@@ -250,7 +254,7 @@ Per ogni famiglia di dati il contratto comprenderà uno schema di validazione es
 | Elezioni | Camere, territori e loro versioni, partiti, candidati, candidature |
 | Fonti | Provider, fonti configurate, associazioni alle sezioni, esecuzioni |
 | Sondaggi | Rilevazioni, domande, popolazioni, opzioni e risultati |
-| Mercati | Contratti, esiti, regole di risoluzione, osservazioni di prezzo |
+| Mercati | Contratti, esiti/token, regole di risoluzione, osservazioni con tipo di prezzo, bid/ask, spread, tempi e politica di qualità versionata |
 | Notizie | Articoli, provenienza, associazioni, argomenti, gruppi di duplicati |
 | Previsioni | Input congelati, run, risultati, diagnostica, pubblicazioni |
 | Operazioni | Utenti amministrativi, audit, stato dei lavori |
@@ -305,11 +309,21 @@ L'obiettivo è un costo ricorrente di accesso ai dati pari a zero. L'accesso gra
 
 La documentazione pubblica di VoteHub presenta un'API beta con licenza CC BY 4.0: attribuzione e verifica della copertura restano necessarie. [VoteHub](https://votehub.com/polls/api/).
 
+La verifica documentale del 22 ottobre 2026 conferma queste indicazioni, ma non dimostra una copertura sufficiente delle singole gare Camera/Senato o degli archivi necessari alla valutazione. La fase 0 deve misurare separatamente copertura per competizione, tipi di sondaggio, profondità storica e disponibilità delle revisioni. Se VoteHub non copre una famiglia di dati, limitarne l'uso alle famiglie verificate e cercare una fonte gratuita autorizzata o un import controllato. In assenza di alternative, ridurre esplicitamente il perimetro dell'osservatorio e mantenere aperto il modello che dipende dai dati mancanti.
+
 Polymarket documenta endpoint per eventi, mercati, prezzi, spread e storico. Il connettore deve usare soltanto i servizi di lettura previsti, rispettando i limiti correnti. [API Polymarket](https://docs.polymarket.com/api-reference/predictions/overview).
 
 FRED richiede una chiave applicativa; Census documenta il rilascio gratuito della chiave. Prima di attivarli verificare le condizioni delle serie effettivamente usate e l'eventuale redistribuzione. [FRED](https://fred.stlouisfed.org/docs/api/api_key.html), [Census](https://www.census.gov/data/developers/guidance/api-user-guide.API_Key.html).
 
 Ogni fonte avrà una scheda con URL, condizioni, attribuzione richiesta, disponibilità gratuita verificata, data della verifica, frequenza, limiti, campi attesi e comportamento in caso di indisponibilità. Una fonte non ancora verificata non è una dipendenza garantita del rilascio.
+
+### 8.1 Definizione del prezzo di mercato
+
+Per il confronto iniziale usare il punto medio fra migliore proposta di acquisto e migliore proposta di vendita (`(bid + ask) / 2`) dello stesso esito/token, acquisiti nello stesso snapshot. Conservare anche i due prezzi, lo spread, il tempo dichiarato dal provider quando disponibile e il momento di acquisizione. Il valore visualizzato come percentuale mantiene l'etichetta di probabilità implicita di mercato.
+
+Prima di implementare l'adapter, la fase 0 deve fissare nella scheda della fonte le soglie di spread e freschezza e verificare che l'endpoint scelto restituisca questa misura senza sostituirla con l'ultimo scambio. Quotazioni mancanti, non valide, incrociate o oltre le soglie rendono indisponibile il confronto corrente; l'ultimo dato valido può restare visibile con età e stato espliciti. Nessun ripiego silenzioso sull'ultimo scambio o su un solo lato del book.
+
+Gli archivi importati conservano il tipo di prezzo effettivamente fornito: una serie di ultimi scambi non viene unita a una serie di punti medi. Quando la misura storica è diversa o non documentata, mostrarla separatamente oppure escluderla dal confronto omogeneo con il modello. Versionare ogni cambiamento della politica e segnalare le discontinuità. Il confronto con una previsione usa un'osservazione di mercato valida disponibile entro il medesimo istante di riferimento, senza usare prezzi successivi.
 
 ## 9. Raccolta e aggiornamento
 
@@ -359,6 +373,8 @@ Sono valori iniziali di configurazione, da validare con limiti delle fonti e cap
 
 Un nuovo risultato viene pubblicato solo se completo rispetto alla sua politica di qualità. Una transazione aggiorna il riferimento al risultato pubblicato; un job più vecchio terminato in ritardo non deve sostituire quello più recente.
 
+Per le previsioni, la stessa operazione verifica anche lo stato della domanda e il termine di pubblicazione del paragrafo 10.5, usando il tempo del database. Un job iniziato prima del termine ma concluso dopo non può pubblicare un nuovo pronostico corrente. La lettura applica il termine anche se il worker è fermo; cache e UI non devono mantenere l'etichetta di previsione corrente oltre la scadenza.
+
 Le pagine leggono dati preparati. Per il primo rilascio, cache a durata breve con budget di ritardo dichiarato, indicativamente 60–300 secondi; nessuna dipendenza da invalidazioni in memoria fra web e worker. Cache e dataset sono sempre contestualizzati al paese e, quando pertinenti, alla sezione e all'edizione. Le pagine paese aggregano soltanto le sezioni che appartengono a quel paese.
 
 In caso di guasto resta disponibile l'ultimo risultato valido con indicazione di obsolescenza. Se manca un input indispensabile, il nuovo run non viene pubblicato. La politica specifica stabilisce quando mostrare soltanto lo storico o sospendere la previsione corrente.
@@ -403,9 +419,22 @@ Il modello sarà implementato in TypeScript con funzioni testabili, generatore c
 - Misurare Brier score e log loss per gli esiti probabilistici, calibrazione e copertura degli intervalli; valutare separatamente errori sui seggi.
 - Tenere conto della dipendenza fra competizioni: molte gare nella stessa elezione non equivalgono a molte elezioni indipendenti.
 - Confrontare con baseline esplicite e documentare l'incertezza della valutazione.
-- Se i dati non bastano per una validazione attendibile, pubblicare lo stato sperimentale o rinviare la previsione, mantenendo operativo l'osservatorio.
+- Definire e versionare prima della valutazione finale i criteri per la qualifica di modello validato: copertura minima, periodi di valutazione, metriche, confronto con baseline e limiti accettabili. Il rapporto documenta il superamento o il mancato superamento di ciascun criterio.
+- Se i dati non bastano per una validazione attendibile, rendere disponibile un modello sperimentale chiaramente etichettato oppure rinviare la previsione, mantenendo operativo l'osservatorio. La disponibilità sperimentale non completa l'obiettivo del modello validato.
 
 Nessun criterio di completamento può promettere che il modello anticiperà correttamente una specifica elezione.
+
+### 10.5 Termine delle previsioni e archivio
+
+Per ogni domanda previsionale registrare un termine di pubblicazione con fuso orario originario, istante UTC e riferimento ufficiale al calendario. Fissarlo nella fase 0 non oltre la prima chiusura dei seggi delle competizioni che concorrono alla domanda; per il controllo di una camera considerare tutte le competizioni incluse. Eventuali turni successivi richiedono domande e termini espliciti. Versionare le modifiche al calendario senza riaprire automaticamente una domanda già chiusa.
+
+Gli stati della domanda sono `aperta`, `chiusa alle previsioni` e `archiviata`. Raggiunto il termine, bloccare nuove pubblicazioni previsionali e congelare il riferimento all'ultimo run effettivamente pubblicato prima della scadenza, insieme a input e metodologia. Se non esiste, dichiarare che il sito non ha pubblicato una previsione prima del termine. Il controllo deve valere anche in caso di riavvio, job in ritardo o mancata esecuzione dello scheduler; una domanda registrata dopo il proprio termine nasce già chiusa.
+
+Una domanda chiusa può essere archiviata anche in attesa del risultato: distinguere esito non ancora disponibile da esito verificato. L'eventuale acquisizione successiva dei risultati ufficiali segue provenienza e revisioni e serve alla valutazione; non modifica i run congelati. Un'edizione passa in archivio quando tutte le sue domande sono chiuse. Questo ciclo non richiede risultati elettorali in tempo reale.
+
+Notizie, prezzi e rettifiche possono continuare ad alimentare l'osservatorio come dati successivi alla chiusura, senza generare pronostici correnti. URL e storico restano consultabili; la UI distingue previsione congelata, dato successivo all'evento e ricostruzione retrospettiva. Gli scenari su run congelati sono etichettati come scenari storici e mantengono l'eventuale stato sperimentale del modello di partenza.
+
+Le ricostruzioni possono essere pubblicate nell'archivio con data reale di elaborazione, istante storico ricostruito e ipotesi sulla disponibilità degli input, senza occupare il riferimento al run previsionale congelato. Possono alimentare scenari storici soltanto se identificabili e riproducibili; l'etichetta di ricostruzione rimane visibile anche nello scenario.
 
 ## 11. Opinione pubblica, notizie e scenari
 
@@ -429,6 +458,7 @@ Registrare insieme agli indicatori il paniere di fonti: aggiungere o rimuovere u
 - Esporre pochi parametri comprensibili, con limiti documentati.
 - Usare lo stesso motore di calcolo della previsione, dove applicabile.
 - Etichettare sempre il risultato come scenario dell'utente.
+- Riportare lo stato sperimentale del modello di partenza, se presente, e la natura storica dello scenario quando la domanda è chiusa.
 - Nessun effetto sui dati o sulle previsioni pubblicate.
 - Eseguire nel browser i calcoli sufficientemente leggeri; per calcoli server imporre limiti, cache e protezione dagli abusi.
 - Preferenze locali nel browser; nessun account pubblico necessario.
@@ -468,8 +498,10 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 **Attività**
 
 - Congelare il perimetro della prima edizione Midterms e le domande da prevedere.
+- Registrare termini di pubblicazione e calendario di riferimento secondo il paragrafo 10.5; definire il perimetro del primo osservatorio e la fattibilità di un eventuale rilascio ridotto prima del voto, senza assumerlo come scadenza garantita.
 - Inventariare il materiale utile dello ZIP senza eseguire i suoi installatori.
 - Verificare provider, schemi, copertura, gratuità e condizioni delle prime fonti.
+- Verificare la copertura effettiva di VoteHub e fissare misura di prezzo, endpoint e soglie di qualità dei mercati secondo il paragrafo 8.1.
 - Individuare archivi e risultati necessari alla valutazione del modello.
 - Rilevare CPU, RAM, disco, sistema operativo, servizi esistenti e collocazione di Coolify sul server IONOS.
 - Identificare dominio/DNS, destinazione dei backup e luogo di esecuzione delle build.
@@ -477,7 +509,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Consegne:** specifica del prodotto, matrice fonti, inventario dell'ambiente, rischi e alternative.
 
-**Accettazione:** nessuna dipendenza essenziale classificata come gratuita senza verifica; disponibilità e limiti dei dati storici espliciti. L'eventuale mancanza di dati previsionali non impedisce di procedere con l'osservatorio.
+**Accettazione:** nessuna dipendenza essenziale classificata come gratuita senza verifica; copertura per famiglia e competizione, disponibilità e limiti dei dati storici espliciti; termini di pubblicazione e politica dei prezzi documentati. L'eventuale mancanza di dati previsionali non impedisce di procedere con un osservatorio dal perimetro ridotto dichiarato.
 
 ### Fase 1 — Fondazioni del progetto e distribuzione locale
 
@@ -485,7 +517,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Attività**
 
-- Creare repository indipendente, Next.js, TypeScript strict e comandi uniformi.
+- Inizializzare Next.js, TypeScript strict e comandi uniformi nel repository esistente, preservandone documentazione e indipendenza.
 - Impostare struttura, confini degli import, catalogo paesi e registrazione del modulo USA/Midterms.
 - Predisporre PostgreSQL locale e validazione delle variabili d'ambiente.
 - Configurare typecheck, lint, test e build in integrazione continua.
@@ -507,6 +539,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 - Implementare repository specifici e schemi Zod.
 - Definire identificativi, associazioni esterne, timestamp e deduplicazione.
 - Definire struttura degli input di previsione e pubblicazione versionata.
+- Modellare stati e termini delle domande, riferimento al run congelato e tipo di prezzo delle osservazioni di mercato.
 
 **Consegne:** schema, dizionario dei dati, contratti e fixture rappresentative.
 
@@ -522,7 +555,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 - Implementare client HTTP comune, limiti, retry e classificazione degli errori.
 - Gestire cursori, idempotenza, stato dei job e salute delle fonti.
 - Implementare normalizzazione, quarantena dei dati incompatibili e pubblicazione atomica.
-- Predisporre import CSV/JSON amministrativo con anteprima e controllo errori.
+- Predisporre il servizio interno di import CSV/JSON con validazione, riepilogo degli errori, provenienza e tracciamento dell'esecuzione, utilizzabile da test e strumenti locali controllati. Nessuna rotta web di import in questa fase; anteprima amministrativa e autorizzazioni vengono integrate insieme nella fase 6.
 
 **Consegne:** pipeline completa verificata su fixture e integrazioni controllate.
 
@@ -534,10 +567,10 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Attività**
 
-- Implementare adapter Polymarket, VoteHub e RSS selezionati.
+- Implementare adapter Polymarket, VoteHub e RSS per le sole famiglie e fonti ammesse dalla verifica della fase 0; documentare eventuali sostituzioni gratuite autorizzate.
 - Creare catalogo dell'edizione, competizioni, candidati e associazioni.
 - Verificare corrispondenza fra mercati e domande previsionali.
-- Importare lo storico autorizzato e i risultati di riferimento.
+- Importare lo storico autorizzato e i risultati di riferimento disponibili; registrare le lacune che impediscono il modello senza bloccare il perimetro approvato dell'osservatorio.
 - Gestire dati mancanti, ambiguità, duplicati e rettifiche.
 - Attivare FRED/Census solo se necessari al modello scelto.
 
@@ -567,37 +600,40 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Attività**
 
-- Collegare tutte le pagine ai dati reali e alle rispettive provenienze.
+- Collegare le pagine dell'osservatorio ai dati reali e alle rispettive provenienze; rendere disponibili le viste previsionali e gli scenari soltanto con le consegne pertinenti delle fasi 7 e 8.
 - Implementare storico, filtri, confronto fra rilevazioni e indicatori di aggiornamento.
 - Implementare autenticazione amministrativa, autorizzazioni server e audit.
+- Collegare il servizio interno di import a un'anteprima amministrativa e a operazioni protette lato server; verificare autorizzazione sia per l'anteprima sia per il salvataggio.
 - Permettere sospensione delle fonti, esclusione dai nuovi calcoli, correzione delle associazioni e riavvio controllato dei job.
+- Implementare stati di chiusura e archivio e la loro presentazione, anche quando non esiste alcun run previsionale precedente al termine.
 - Pubblicare fonti e metodologia descrittiva.
 - Misurare interrogazioni, cache e crescita del database.
 
-**Consegne:** prima versione dell'osservatorio completa, distribuibile dopo i controlli operativi della fase 10.
+**Consegne:** prima versione dell'osservatorio completa nel perimetro della fase 0, distribuibile dopo il collaudo della fase 9 e le verifiche di rilascio della fase 10.
 
 **Accettazione:** nessun dato inventato nelle pagine pubbliche; indisponibilità chiaramente mostrata; operazioni amministrative vietate agli anonimi anche chiamando direttamente le API; rimozione di una fonte senza perdita dello storico.
 
 ### Fase 7 — Modello statistico e valutazione
 
-**Dipende da:** fase 4 e disponibilità di dati storici adeguati.
+**Dipende da:** fase 4 e dati adeguati per il motore; fasi 5 e 6 per l'integrazione nella UI e nel ciclo di pubblicazione. La qualifica di modello validato richiede anche archivi adeguati alla valutazione temporale; in loro assenza è possibile soltanto il traguardo sperimentale del paragrafo 19, se ne sono rispettati i requisiti.
 
 **Attività**
 
 - Formalizzare esiti, regole e baseline.
 - Implementare aggregazione dei sondaggi, distribuzioni e simulazione correlata.
 - Versionare parametri, seed, codice e input.
-- Costruire valutazione temporale e confronto con baseline e mercato.
-- Definire criteri di pubblicabilità, gestione delle lacune e stati sperimentali.
+- Definire e versionare criteri di pubblicabilità e validazione prima della valutazione finale, gestione delle lacune e stati sperimentali.
+- Costruire valutazione temporale e confronto con baseline e mercato secondo quei criteri.
 - Esporre risultati, incertezza e metodologia nella UI.
+- Applicare il termine di pubblicazione anche ai job in corso; congelare i run e separare le ricostruzioni successive secondo il paragrafo 10.5.
 
-**Consegne:** motore riproducibile, rapporto di valutazione, previsione pubblicabile quando sostenuta dall'evidenza.
+**Consegne:** motore riproducibile, rapporto di valutazione e stato esplicito del traguardo sperimentale o validato; previsione corrente pubblicabile soltanto per domande ancora aperte.
 
-**Accettazione:** stessi input e versione riproducono il risultato entro la tolleranza numerica documentata; nessuna contaminazione temporale nota; calibrazione e limiti riportati; nessuna promessa di accuratezza non sostenuta.
+**Accettazione:** stessi input e versione riproducono il risultato entro la tolleranza numerica documentata; nessuna contaminazione temporale nota; diagnostica e limiti riportati; termine rispettato anche con job tardivi e riavvii. La fase è completa come modello validato solo se il rapporto dimostra il superamento dei criteri fissati; il solo traguardo sperimentale lascia aperta la validazione, senza promesse di accuratezza.
 
 ### Fase 8 — Scenari ed evoluzione dell'opinione pubblica
 
-**Dipende da:** fasi 6 e 7 per gli scenari; fase 6 per le serie descrittive.
+**Dipende da:** fase 6 e motore riproducibile con run pubblicato della fase 7 per gli scenari; fase 6 per le serie descrittive. Gli scenari possono usare un run sperimentale mantenendone l'etichetta, senza dichiarare conclusa la validazione della fase 7.
 
 **Attività**
 
@@ -613,12 +649,15 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 ### Fase 9 — Verifiche complete e prova di estensibilità
 
-**Dipende da:** funzioni da includere nel rilascio.
+**Dipende da:** funzioni da includere nel rilascio e configurazione di distribuzione preparata dalla fase 1. Non dipende dal rilascio pubblico della fase 10.
 
 **Attività**
 
 - Eseguire test end-to-end, accessibilità, sicurezza applicativa e carico rappresentativo.
+- Predisporre un ambiente di collaudo isolato con immagini e configurazione rappresentative del rilascio; verificare reti private, persistenza, limiti di risorse, backup esterno e ripristino prima dell'apertura pubblica.
+- Misurare gli obiettivi del paragrafo 15 con carico web e worker contemporanei e risorse equivalenti a quelle previste; documentare differenze dall'ambiente finale e controlli da ripetere nella fase 10.
 - Provare errori delle fonti, timeout, dati malformati, riavvii e job ripetuti.
+- Verificare prezzi mancanti o non omogenei, soglie di qualità, chiusura delle domande, job conclusi oltre il termine e archivio senza precedenti pronostici.
 - Verificare migrazioni da versione precedente e isolamento delle edizioni.
 - Creare una piccola fixture di un secondo paese e di una sua sezione per provare registrazione, layout comune e separazione delle regole, senza sviluppare le sezioni italiane complete.
 - Verificare che sezioni di paesi diversi possano usare lo stesso slug locale senza collisioni di URL, cache, job o risultati; controllare breadcrumb e URL canonici sotto `/usa/midterms`.
@@ -626,7 +665,7 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 
 **Consegne:** rapporto dei controlli, difetti risolti, limiti residui documentati.
 
-**Accettazione:** nessun difetto bloccante nei flussi pubblici o amministrativi; nuove sezioni registrabili senza modificare formule o componenti Midterms; obiettivi operativi della fase 10 misurati sull'ambiente destinato al rilascio.
+**Accettazione:** nessun difetto bloccante nei flussi pubblici o amministrativi; nuove sezioni registrabili senza modificare formule o componenti Midterms; obiettivi operativi del paragrafo 15 misurati in collaudo; ripristino riuscito e differenze dall'ambiente finale documentate. Queste evidenze precedono la fase 10.
 
 ### Fase 10 — Coolify, rilascio e gestione operativa
 
@@ -638,9 +677,9 @@ Ogni fase produce risultati verificabili. Le dipendenze indicano l'ordine logico
 - Configurare ambiente, dominio, HTTPS, reti private, volumi e limiti.
 - Eseguire migrazione controllata prima dell'avvio dei servizi compatibili.
 - Abilitare soltanto le raccolte verificate, evitando doppia pianificazione.
-- Configurare backup esterni e provare il ripristino in ambiente isolato.
-- Misurare comportamento con carico web e worker contemporanei.
-- Eseguire controlli funzionali dopo il rilascio e predisporre rollback.
+- Attivare e verificare i backup esterni nell'ambiente finale; riutilizzare la prova di ripristino della fase 9 solo se rappresentativa, altrimenti ripeterla in isolamento prima dell'apertura pubblica.
+- Confermare nell'ambiente finale limiti e misure della fase 9, ripetendo i controlli interessati dalle differenze di configurazione prima dell'apertura pubblica.
+- Predisporre rollback prima dell'apertura pubblica ed eseguire controlli funzionali dopo il rilascio.
 - Consegnare procedure operative e manutenzione.
 
 **Consegne:** applicazione online, backup verificato, monitoraggio e runbook.
@@ -697,10 +736,10 @@ Usare migrazioni additive quando possibile. Il ritorno alla precedente immagine 
 | Area | Controlli essenziali |
 |---|---|
 | Dominio | Regole elettorali, unità, percentuali, margini e incertezza |
-| Contratti delle fonti | Payload validi, campi mancanti, cambi di schema, date, paginazione |
+| Contratti delle fonti | Payload validi, campi mancanti, cambi di schema, date, paginazione, tipo di prezzo e soglie di qualità |
 | Persistenza | Revisioni, vincoli, migrazioni, input congelati |
-| Worker | Retry, riavvio, deduplicazione, cursori e ordinamento delle pubblicazioni |
-| Web | Navigazione paese/sezione/edizione, breadcrumb, filtri, stati vuoti, aggiornamento, URL canonici |
+| Worker | Retry, riavvio, deduplicazione, cursori, ordinamento delle pubblicazioni e blocco dei run oltre il termine |
+| Web | Navigazione paese/sezione/edizione, breadcrumb, filtri, stati vuoti, aggiornamento, URL canonici, archivio e scadenza delle etichette previsionali anche in cache |
 | Amministrazione | Accesso, autorizzazioni dirette alle API, audit e disattivazione fonti |
 | Modello | Riproducibilità, causalità temporale, calibrazione e baseline |
 | Operazioni | Risorse, crescita del disco, backup, restore e rollback |
@@ -758,6 +797,8 @@ L'indisponibilità di archivi storici adeguati o cambiamenti nelle fonti possono
 
 L'osservatorio può essere rilasciato prima del modello, applicando alle funzioni già pronte i controlli delle fasi 9 e 10. Non promettere il completamento del modello prima di una specifica elezione sulla base di questa stima preliminare.
 
+Le stime delle fasi 9 e 10 comprendono rispettivamente il collaudo operativo prima del rilascio e la conferma nell'ambiente finale, senza contare due volte la stessa prova. La fase 0 rivaluterà l'impegno in base a fonti, ambiente e perimetro effettivi. Per il calendario dell'edizione 2026 vale l'assunzione del paragrafo 2.1: nessuna consegna completa garantita prima del voto.
+
 ## 17. Rischi e decisioni operative
 
 | Rischio | Risposta prevista |
@@ -802,6 +843,14 @@ Documentazione da consegnare nel repository:
 - `docs/BACKUP_RESTORE.md`: backup, ripristino e prove effettuate.
 - `docs/ADDING_A_SECTION.md`: procedura per registrare un paese e aggiungere una sua sezione, incluse rotte e contratti.
 
-La prima versione completa è conclusa quando l'hub e Midterms sono accessibili, le fonti funzionano entro i limiti dichiarati, dati e risultati hanno provenienza verificabile, le previsioni sono pubblicate con una valutazione adeguata o uno stato sperimentale esplicito, gli scenari sono separati, l'amministrazione è protetta e il ripristino è stato provato.
+I traguardi sono distinti e vanno rendicontati separatamente:
 
-Se la validazione previsionale resta insufficiente, il rilascio dell'osservatorio può considerarsi completato come consegna autonoma; l'obiettivo del modello resta aperto e deve essere dichiarato tale.
+| Traguardo | Criteri di completamento |
+|---|---|
+| Osservatorio completo | Hub e Midterms accessibili nel perimetro della fase 0, fonti verificate, provenienza e freschezza visibili, lacune dichiarate, amministrazione protetta, chiusura e archivio corretti, controlli delle fasi 9 e 10 superati e ripristino provato. Non richiede un modello previsionale. |
+| Modello sperimentale disponibile | Motore riproducibile, input e codice versionati, controlli temporali e di pubblicazione superati, diagnostica e limiti documentati, etichetta sperimentale visibile su risultati e scenari. Valutazioni mancanti o insufficienti sono dichiarate; questo traguardo non equivale alla validazione. |
+| Modello validato | Requisiti tecnici di riproducibilità, provenienza e pubblicazione sopra descritti e rapporto che dimostra il superamento dei criteri fissati prima della valutazione finale: copertura, separazione temporale, metriche probabilistiche, calibrazione, confronto con baseline e incertezza della valutazione. La qualifica vale soltanto per il perimetro valutato e non garantisce l'esito di una specifica elezione; non rietichetta retroattivamente i run sperimentali già pubblicati. |
+
+La prima versione completa del prodotto richiede l'osservatorio, il modello validato, gli scenari separati e le serie descrittive previste, con i controlli delle fasi 9 e 10 applicati a tutte le funzioni rilasciate. Se la validazione resta insufficiente, l'osservatorio può essere concluso come consegna autonoma e il modello sperimentale può essere disponibile, ma il traguardo del modello validato e la prima versione completa restano aperti.
+
+Per un'edizione già chiusa, i risultati del modello sono consultabili soltanto come run realmente congelati o ricostruzioni retrospettive dichiarate; nessun criterio di completamento richiede o consente di inventare una pubblicazione precedente al termine.
