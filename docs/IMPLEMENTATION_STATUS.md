@@ -19,7 +19,7 @@ Chiarimento dell'utente del 22 ottobre: l'orchestratore deve continuare fino al 
 | Specifica e dipendenze | 0 | Perimetro, evidenze sulle fonti, ambiente e lacune dichiarate | In corso |
 | Fondazioni locali | 1 | Typecheck, lint, test mirati, build e avvio documentato; controlli container separati | Incremento locale verificato; collaudo container ancora da eseguire |
 | Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | Verificato in CI PostgreSQL 17 sul commit `284f095` |
-| Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Fase 3 in corso; adapter e fonti ancora da collegare |
+| Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Pipeline e adapter verificati in CI; collegamento del registro fonti in corso |
 | Interfaccia e osservatorio | 5–6 | Accessibilità, provenienza, stati reali e autorizzazioni amministrative | Componenti e navigazione verificati; letture reali e amministrazione in corso |
 | Modello e scenari | 7–8 | Riproducibilità, valutazione temporale e limiti di calcolo | Motore puro e criteri di valutazione in corso; nessun modello pubblicato |
 | Collaudo e rilascio | 9–10 | Carico, ripristino, sicurezza e verifiche dell'ambiente finale | Non iniziato |
@@ -46,6 +46,14 @@ Contratti Zod e dizionario dei dati, schema Drizzle, migrazione iniziale e repos
 Typecheck, lint, formattazione, controllo della struttura delle migrazioni e **23 test ordinari** superati. La [CI del commit `284f095`](https://github.com/simoneraffaelli/polls/actions/runs/39770292505) ha eseguito con successo anche **5 test su PostgreSQL 17 reale**, build worker/web e 2 test browser. La prima prova remota ha individuato una conversione errata dei timestamp nelle query dirette: corretta usando istanti numerici e confrontando il termine nel database. L'esclusione Git dei dati locali è stata limitata alla cartella radice per non nascondere i contratti applicativi.
 
 La fase 3 può proseguire. I test PostgreSQL usano schemi temporanei isolati in CI; non certificano ancora backup, reti o risorse del VPS.
+
+### Raccolta, adapter e componenti: CI superata
+
+La [CI del commit `dbc9c46`](https://github.com/simoneraffaelli/polls/actions/runs/39775227789) ha superato typecheck, lint, formattazione, **68 test ordinari**, **12 test PostgreSQL 17**, build worker/web e **3 test browser**. I test di raccolta coprono retry, riavvio, pausa, rinvio persistente dopo rate limit, transazioni complete e conflitti del cursore. Il precedente incremento `0e096f9` è passato separatamente. Un errore di formattazione in una fixture del commit intermedio `52efe51` è stato corretto prima di questo esito.
+
+### Motore sperimentale: implementazione pura
+
+Motore e scenario usano snapshot espliciti, parametri inclusi nel digest, seed riproducibile e limiti di costo. La revisione ha corretto disponibilità temporale, orientamento comune degli shock, regole di maggioranza, validazione numerica e verifiche dei payload JSON. **13 test mirati** superati localmente. Le [scelte metodologiche](FORECAST_METHODOLOGY.md) precedono la valutazione; il [rapporto](FORECAST_EVALUATION.md) dichiara l'assenza degli archivi necessari per dimostrare validazione causale. Persistenza del modello, pubblicazione e collegamento allo scenario pubblico sono ancora in corso; nessun run 2026 viene inventato.
 
 ## Fase 0: perimetro iniziale
 
