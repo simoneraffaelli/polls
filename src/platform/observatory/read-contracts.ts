@@ -25,6 +25,7 @@ export type ObservatorySourceSummary = Readonly<{
 
 export type ObservatoryPoll = Readonly<{
   pollId: string;
+  linkId: string;
   revisionId: string;
   revisionNo: number;
   raceId: string | null;
@@ -35,6 +36,11 @@ export type ObservatoryPoll = Readonly<{
   declaredPublication: string | null;
   acquiredAt: string;
   sourceUrl: string;
+  /** Current editorial overlay; the raw observation and frozen model refs are unchanged. */
+  currentLinkIncluded: boolean;
+  linkDecisionReason: "association_superseded" | null;
+  excludedFromFutureForecasts: boolean;
+  pollExclusionReason: "poll_excluded_from_future_forecasts" | null;
   source: ObservatorySource;
   questions: readonly Readonly<{
     id: string;
@@ -63,6 +69,14 @@ export type PollRevisionHistoryEntry = Readonly<{
   acquiredAt: string;
   fieldworkStart: string;
   fieldworkEnd: string;
+}>;
+
+export type PollEditorialHistoryEntry = Readonly<{
+  id: string;
+  kind: "forecast_exclusion" | "association";
+  linkId: string | null;
+  value: boolean;
+  recordedAt: string;
 }>;
 
 export type ObservatoryArticle = Readonly<{

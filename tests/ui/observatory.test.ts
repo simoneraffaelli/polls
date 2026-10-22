@@ -10,6 +10,7 @@ const poll = (
   percentage: number,
 ): ObservatoryPoll => ({
   pollId: id,
+  linkId: `link:${id}`,
   revisionId: `revision:${id}`,
   revisionNo: 1,
   raceId: null,
@@ -20,6 +21,10 @@ const poll = (
   declaredPublication: null,
   acquiredAt: "2026-10-04T00:00:00Z",
   sourceUrl: "https://example.org/poll",
+  currentLinkIncluded: true,
+  linkDecisionReason: null,
+  excludedFromFutureForecasts: false,
+  pollExclusionReason: null,
   source: {
     id: "source",
     name: "Fonte",
@@ -74,5 +79,15 @@ describe("public observatory presentation", () => {
       poll("a", "likely_voters", "Domanda A", 51),
     ]);
     expect(series.map((point) => point.value)).toEqual([51, 49]);
+    expect(
+      comparablePollSeries([
+        poll("a", "likely_voters", "Domanda A", 51),
+        {
+          ...poll("b", "likely_voters", "Domanda A", 49),
+          currentLinkIncluded: false,
+          linkDecisionReason: "association_superseded",
+        },
+      ]),
+    ).toEqual([]);
   });
 });

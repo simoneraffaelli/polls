@@ -9,6 +9,10 @@ import {
   HOUSE_2026_RACES,
   SENATE_2026_RACES,
 } from "@/modules/usa/midterms/catalog-2026";
+import { z } from "zod";
+
+export const validPublicUuid = (value: string) =>
+  z.uuid().safeParse(value).success;
 
 const midtermsViews: readonly EditionViewDefinition[] = [
   {
@@ -114,7 +118,7 @@ export function midtermsPollHistoryPath(
   if (
     section.id !== midtermsSection.id ||
     edition.id !== "edition:us:midterms:2026" ||
-    !/^[a-f0-9-]{36}$/.test(pollId)
+    !validPublicUuid(pollId)
   )
     throw new Error("Invalid Midterms poll history reference");
   return `${catalog.editionPath(section, edition)}/polls/${pollId}`;

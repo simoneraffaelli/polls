@@ -1,29 +1,17 @@
-import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { MEDSL_SENATE_V8, parseMedslSenateCsv } from "./senate";
+import { MEDSL_SENATE_V8 } from "./senate";
+import { loadPinnedSenateV8 } from "./pinned-file";
 
 /** Local validation only. Reads the pinned CC0 original; never imports to the DB. */
 function main(): void {
-  const inputPath = fileURLToPath(
-    new URL(
-      "../../../.tools/reference/medsl-senate-v8-original.csv",
-      import.meta.url,
-    ),
-  );
   const outputPath = fileURLToPath(
     new URL(
       "../../../.tools/reference/medsl-senate-v8-report.json",
       import.meta.url,
     ),
   );
-  const bytes = readFileSync(inputPath);
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (sha256 !== MEDSL_SENATE_V8.originalFileSha256)
-    throw new Error("MEDSL Senate V8 original checksum mismatch");
-  const results = parseMedslSenateCsv(
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-  );
+  const results = loadPinnedSenateV8();
   const ohio = results.find(
     (result) =>
       result.year === 2024 &&
@@ -51,8 +39,8 @@ function main(): void {
   }
   const report = {
     source: MEDSL_SENATE_V8,
-    byteLength: bytes.byteLength,
-    sha256,
+    byteLength: 530_501,
+    sha256: MEDSL_SENATE_V8.originalFileSha256,
     contestCount: results.length,
     yearRange: [
       Math.min(...results.map((result) => result.year)),

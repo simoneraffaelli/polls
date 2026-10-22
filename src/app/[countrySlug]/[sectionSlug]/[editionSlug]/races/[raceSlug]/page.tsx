@@ -155,8 +155,10 @@ export default async function RacePage({ params, searchParams }: Props) {
             polls.status === "ready"
               ? {
                   status: "ready",
-                  value: pollRows(polls.value.items, (id) =>
-                    `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
+                  value: pollRows(
+                    polls.value.items,
+                    (id) =>
+                      `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
                   ),
                 }
               : {
@@ -179,4 +181,3 @@ export default async function RacePage({ params, searchParams }: Props) {
     </>
   );
 }
-

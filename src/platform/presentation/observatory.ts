@@ -17,10 +17,10 @@ export function freshnessFromSources(
       .at(-1) ?? null;
   const state = states.some((item) => item.status === "error")
     ? "error"
-    : states.some((item) => item.status === "current")
-      ? "current"
-      : states.some((item) => item.status === "stale")
-        ? "stale"
+    : states.some((item) => item.status === "stale")
+      ? "stale"
+      : states.some((item) => item.status === "current")
+        ? "current"
         : "unavailable";
   return { state, acquiredAt };
 }
@@ -34,7 +34,7 @@ export function pollRows(
       id: `${poll.revisionId}:${question.id}`,
       ...(historyPath ? { historyHref: historyPath(poll.pollId) } : {}),
       pollster: poll.pollster,
-      subject: `${question.wording ?? question.kind} · revisione ${poll.revisionNo}`,
+      subject: `${question.wording ?? question.kind} · revisione ${poll.revisionNo}${poll.currentLinkIncluded ? "" : " · Collegamento escluso dalla vista corrente"}${poll.excludedFromFutureForecasts ? " · Escluso dai nuovi calcoli" : ""}`,
       observedPeriod: `${poll.fieldworkStart} – ${poll.fieldworkEnd}`,
       population: `${question.populationDescription} (${question.populationKind})`,
       sample:
@@ -80,7 +80,8 @@ export function comparablePollSeries(
   polls: readonly ObservatoryPoll[],
 ): readonly SeriesPoint[] {
   const groups = new Map<string, SeriesPoint[]>();
-  for (const poll of polls)
+  for (const poll of polls) {
+    if (!poll.currentLinkIncluded) continue;
     for (const question of poll.questions) {
       if (!question.wording) continue;
       for (const option of question.options) {
@@ -89,17 +90,19 @@ export function comparablePollSeries(
           question.kind,
           question.wording,
           question.populationKind,
+          question.populationDescription,
           option.label,
         ]);
         const points = groups.get(key) ?? [];
         points.push({
           date: poll.fieldworkEnd,
           value: option.percentage,
-          label: option.label,
+          label: `${question.wording} · ${question.populationDescription} · ${option.label}`,
         });
         groups.set(key, points);
       }
     }
+  }
   const candidates = [...groups.values()].filter(
     (points) => points.length >= 2,
   );

@@ -61,6 +61,10 @@ export function aggregateRaces(snapshot: ModelSnapshot): {
     !validId(snapshot.scope.sectionId) ||
     !validId(snapshot.scope.editionId) ||
     !validId(snapshot.catalogVersion) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      snapshot.structuralReferenceId,
+    ) ||
+    snapshot.qualityPolicyVersion !== "poll-quality-v1" ||
     !validId(snapshot.modelVersion) ||
     !validId(snapshot.parameterVersion) ||
     !validId(snapshot.seed) ||
@@ -201,6 +205,16 @@ export function aggregateRaces(snapshot: ModelSnapshot): {
     if (
       !validId(poll.signalId) ||
       !validId(poll.revisionId) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        poll.pollLinkId,
+      ) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        poll.optionMappingId,
+      ) ||
+      !validId(poll.externalQuestionId) ||
+      !validId(poll.positiveOptionId) ||
+      !validId(poll.negativeOptionId) ||
+      poll.positiveOptionId === poll.negativeOptionId ||
       !validId(poll.pollsterId) ||
       !validId(poll.sampleGroupId) ||
       signalIds.has(poll.signalId)

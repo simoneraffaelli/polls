@@ -6,7 +6,12 @@ set -euo pipefail
 snapshot="${1:?Pass an explicit restic snapshot ID}"
 [[ "$snapshot" =~ ^[a-f0-9]{8,64}$ ]] || { echo 'Invalid snapshot ID.' >&2; exit 1; }
 container="polls-restore-check-$(date +%s)-$$"
-cleanup() { docker rm -f "$container" >/dev/null 2>&1 || true; }
+created=false
+cleanup() {
+  if [[ "$created" == true ]]; then
+    docker rm -f "$container" >/dev/null 2>&1 || true
+  fi
+}
 trap cleanup EXIT
 started="$(date +%s)"
 # No network or host volume: the only target is this disposable test container.
@@ -14,6 +19,7 @@ docker run --detach --rm --name "$container" --network none --memory 768m \
   --tmpfs /var/lib/postgresql/data:rw,size=2g \
   -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_USER=polls_restore_test \
   -e POSTGRES_DB=polls_restore_test postgres:17.11-bookworm >/dev/null
+created=true
 ready=false
 for attempt in $(seq 1 30); do
   if docker exec "$container" pg_isready -U polls_restore_test -d polls_restore_test >/dev/null 2>&1; then

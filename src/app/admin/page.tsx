@@ -5,6 +5,8 @@ import { readAdminOverview } from "@/infrastructure/auth/admin-repository";
 import { AdminControls } from "./controls";
 import { AdminImportForm } from "./import-form";
 import { isKnownCollectibleSource } from "@/composition/source-registry";
+import { readAdminPollLinks } from "@/infrastructure/auth/admin-poll-repository";
+import { PollOverlayForm } from "./poll-overlay-form";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -12,7 +14,11 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pollOffset?: string }>;
+}) {
   let admin: Awaited<ReturnType<typeof requireAdmin>>;
   try {
     admin = await requireAdmin(
@@ -35,6 +41,11 @@ export default async function AdminPage() {
     );
   }
   const overview = await readAdminOverview(admin.db);
+  const rawOffset = (await searchParams).pollOffset ?? "0";
+  const pollOffset = /^\d{1,5}$/.test(rawOffset)
+    ? Math.min(Number(rawOffset), 10_000)
+    : 0;
+  const pollPage = await readAdminPollLinks(admin.db, pollOffset);
   const manualSource = overview.sources.find(
     (source) => source.providerId === "provider:manual-import",
   );
@@ -114,6 +125,32 @@ export default async function AdminPage() {
           races={overview.raceChoices}
         />
       )}
+      <PollOverlayForm
+        links={pollPage.items}
+        destinations={overview.destinations}
+        races={overview.raceChoices}
+      />
+      <nav
+        aria-label="Pagine dei sondaggi amministrativi"
+        className="mt-3 flex gap-4 text-sm"
+      >
+        {pollOffset > 0 && (
+          <a
+            href={`/admin?pollOffset=${Math.max(0, pollOffset - 50)}`}
+            className="underline"
+          >
+            Sondaggi precedenti
+          </a>
+        )}
+        {pollPage.hasMore && (
+          <a
+            href={`/admin?pollOffset=${pollOffset + 50}`}
+            className="underline"
+          >
+            Altri sondaggi
+          </a>
+        )}
+      </nav>
       <section className="mt-10">
         <h2 className="text-2xl font-semibold">Raccolte recenti</h2>
         <p className="mt-2 text-sm">

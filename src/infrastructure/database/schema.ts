@@ -437,10 +437,77 @@ export const pollOptions = pgTable(
   ],
 );
 
+/** A reviewer explicitly orients raw options to modeled party/caucus sides. */
+export const pollModelOptionMappings = pgTable(
+  "poll_model_option_mappings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    revisionId: uuid("revision_id").notNull(),
+    externalQuestionId: text("external_question_id").notNull(),
+    raceId: uuid("race_id")
+      .notNull()
+      .references(() => races.id),
+    positiveOptionId: text("positive_option_id").notNull(),
+    negativeOptionId: text("negative_option_id").notNull(),
+    positivePartyId: text("positive_party_id").notNull(),
+    negativePartyId: text("negative_party_id").notNull(),
+    positiveCaucusId: text("positive_caucus_id"),
+    negativeCaucusId: text("negative_caucus_id"),
+    reviewedBy: text("reviewed_by")
+      .notNull()
+      .references(() => user.id),
+    reason: text("reason").notNull(),
+    reviewedAt: instant("reviewed_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    foreignKey({
+      name: "poll_model_option_mappings_positive_fk",
+      columns: [
+        table.revisionId,
+        table.externalQuestionId,
+        table.positiveOptionId,
+      ],
+      foreignColumns: [
+        pollOptions.revisionId,
+        pollOptions.externalQuestionId,
+        pollOptions.optionId,
+      ],
+    }),
+    foreignKey({
+      name: "poll_model_option_mappings_negative_fk",
+      columns: [
+        table.revisionId,
+        table.externalQuestionId,
+        table.negativeOptionId,
+      ],
+      foreignColumns: [
+        pollOptions.revisionId,
+        pollOptions.externalQuestionId,
+        pollOptions.optionId,
+      ],
+    }),
+    check(
+      "poll_model_option_mappings_distinct_check",
+      sql`${table.positiveOptionId} <> ${table.negativeOptionId} and ${table.positivePartyId} <> ${table.negativePartyId}`,
+    ),
+    index("poll_model_option_mappings_latest_idx").on(
+      table.revisionId,
+      table.externalQuestionId,
+      table.raceId,
+      table.reviewedAt,
+    ),
+  ],
+);
+
 export const pollEditionLinks = pgTable(
   "poll_edition_links",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    createdAt: instant("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
     pollId: uuid("poll_id")
       .notNull()
       .references(() => pollRecords.id),
@@ -463,6 +530,68 @@ export const pollEditionLinks = pgTable(
       columns: [table.raceId, table.editionId],
       foreignColumns: [races.id, races.editionId],
     }),
+  ],
+);
+
+/** Append-only decisions affect future model input selection, never frozen run refs. */
+export const pollForecastExclusions = pgTable(
+  "poll_forecast_exclusions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollId: uuid("poll_id")
+      .notNull()
+      .references(() => pollRecords.id),
+    editionId: text("edition_id")
+      .notNull()
+      .references(() => editions.id),
+    excluded: boolean("excluded").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id),
+    reason: text("reason").notNull(),
+    recordedAt: instant("recorded_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    index("poll_forecast_exclusions_latest_idx").on(
+      table.pollId,
+      table.editionId,
+      table.recordedAt,
+    ),
+  ],
+);
+
+export const pollLinkDecisions = pgTable(
+  "poll_link_decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pollLinkId: uuid("poll_link_id").notNull(),
+    editionId: text("edition_id").notNull(),
+    pollId: uuid("poll_id").notNull(),
+    included: boolean("included").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id),
+    reason: text("reason").notNull(),
+    recordedAt: instant("recorded_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    foreignKey({
+      name: "poll_link_decisions_link_scope_fk",
+      columns: [table.pollLinkId, table.editionId, table.pollId],
+      foreignColumns: [
+        pollEditionLinks.id,
+        pollEditionLinks.editionId,
+        pollEditionLinks.pollId,
+      ],
+    }),
+    index("poll_link_decisions_latest_idx").on(
+      table.pollLinkId,
+      table.recordedAt,
+    ),
   ],
 );
 
@@ -911,6 +1040,215 @@ export const currentPublications = pgTable(
         publicationHistory.runId,
       ],
     }),
+  ],
+);
+
+/** Exact, immutable model inputs and outputs attached to one sealed forecast run. */
+export const runModelSnapshots = pgTable(
+  "run_model_snapshots",
+  {
+    runId: uuid("run_id").primaryKey(),
+    questionId: uuid("question_id").notNull(),
+    editionId: text("edition_id").notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    snapshotHash: text("snapshot_hash").notNull(),
+    resultHash: text("result_hash").notNull(),
+    iterations: integer("iterations").notNull(),
+    snapshot: jsonb("snapshot").notNull(),
+    result: jsonb("result").notNull(),
+    createdAt: instant("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    unique("run_model_snapshots_request_unique").on(
+      table.questionId,
+      table.snapshotHash,
+      table.iterations,
+    ),
+    foreignKey({
+      name: "run_model_snapshots_run_scope_fk",
+      columns: [table.runId, table.questionId, table.editionId],
+      foreignColumns: [
+        forecastRuns.id,
+        forecastRuns.questionId,
+        forecastRuns.editionId,
+      ],
+    }),
+    check(
+      "run_model_snapshots_snapshot_hash_check",
+      sql`length(${table.snapshotHash}) = 64`,
+    ),
+    check(
+      "run_model_snapshots_result_hash_check",
+      sql`length(${table.resultHash}) = 64`,
+    ),
+    check(
+      "run_model_snapshots_iterations_check",
+      sql`${table.iterations} between 100 and 20000`,
+    ),
+    check(
+      "run_model_snapshots_snapshot_object_check",
+      sql`jsonb_typeof(${table.snapshot}) = 'object'`,
+    ),
+    check(
+      "run_model_snapshots_result_object_check",
+      sql`jsonb_typeof(${table.result}) = 'object'`,
+    ),
+  ],
+);
+
+/** Reviewed structural assumptions are explicit inputs, never seeded forecasts. */
+export const structuralModelReferences = pgTable(
+  "structural_model_references",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    questionId: uuid("question_id").notNull(),
+    editionId: text("edition_id").notNull(),
+    version: text("version").notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    sourceUrl: text("source_url").notNull(),
+    sourceVersion: text("source_version").notNull(),
+    availableAt: instant("available_at").notNull(),
+    acquiredAt: instant("acquired_at").notNull(),
+    contentHash: text("content_hash").notNull(),
+    payload: jsonb("payload").notNull(),
+    reviewedBy: text("reviewed_by")
+      .notNull()
+      .references(() => user.id),
+    reviewedAt: instant("reviewed_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    unique("structural_model_references_question_version_unique").on(
+      table.questionId,
+      table.version,
+    ),
+    foreignKey({
+      name: "structural_model_references_question_scope_fk",
+      columns: [table.questionId, table.editionId],
+      foreignColumns: [forecastQuestions.id, forecastQuestions.editionId],
+    }),
+    check(
+      "structural_model_references_schema_check",
+      sql`${table.schemaVersion} = 'structural-v1'`,
+    ),
+    check(
+      "structural_model_references_hash_check",
+      sql`length(${table.contentHash}) = 64`,
+    ),
+    check(
+      "structural_model_references_time_check",
+      sql`${table.availableAt} <= ${table.acquiredAt} and ${table.acquiredAt} <= ${table.reviewedAt}`,
+    ),
+    check(
+      "structural_model_references_payload_check",
+      sql`jsonb_typeof(${table.payload}) = 'object'`,
+    ),
+  ],
+);
+
+/** Stable MEDSL contest identity; imports never replace a past revision. */
+export const historicalResultRecords = pgTable(
+  "historical_result_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    datasetDoi: text("dataset_doi").notNull(),
+    contestKey: text("contest_key").notNull(),
+    createdAt: instant("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    unique("historical_result_records_identity_unique").on(
+      table.datasetDoi,
+      table.contestKey,
+    ),
+  ],
+);
+
+export const historicalResultRevisions = pgTable(
+  "historical_result_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    recordId: uuid("record_id")
+      .notNull()
+      .references(() => historicalResultRecords.id),
+    revisionNo: integer("revision_no").notNull(),
+    supersedesRevisionId: uuid("supersedes_revision_id"),
+    datasetVersion: text("dataset_version").notNull(),
+    fileSha256: text("file_sha256").notNull(),
+    contentHash: text("content_hash").notNull(),
+    parserVersion: text("parser_version").notNull(),
+    availableAt: instant("available_at").notNull(),
+    acquiredAt: instant("acquired_at").notNull(),
+    year: integer("year").notNull(),
+    stateCode: text("state_code").notNull(),
+    stage: text("stage").notNull(),
+    special: boolean("special").notNull(),
+    totalVotes: bigint("total_votes", { mode: "number" }).notNull(),
+    unattributedVotes: bigint("unattributed_votes", {
+      mode: "number",
+    }).notNull(),
+    candidates: jsonb("candidates").notNull(),
+    marginStatus: text("margin_status").notNull(),
+    leadingCandidate: text("leading_candidate"),
+    marginVotes: bigint("margin_votes", { mode: "number" }),
+    marginShare: numeric("margin_share", { precision: 12, scale: 10 }),
+    exclusionReason: text("exclusion_reason"),
+    sourceVersions: jsonb("source_versions").notNull(),
+  },
+  (table) => [
+    unique("historical_result_revisions_record_no_unique").on(
+      table.recordId,
+      table.revisionNo,
+    ),
+    unique("historical_result_revisions_receipt_unique").on(
+      table.recordId,
+      table.datasetVersion,
+      table.fileSha256,
+      table.contentHash,
+      table.parserVersion,
+    ),
+    unique("historical_result_revisions_id_record_unique").on(
+      table.id,
+      table.recordId,
+    ),
+    foreignKey({
+      name: "historical_result_revisions_supersedes_same_record_fk",
+      columns: [table.supersedesRevisionId, table.recordId],
+      foreignColumns: [table.id, table.recordId],
+    }),
+    check("historical_result_revisions_no_check", sql`${table.revisionNo} > 0`),
+    check(
+      "historical_result_revisions_hash_check",
+      sql`length(${table.fileSha256}) = 64 and length(${table.contentHash}) = 64`,
+    ),
+    check(
+      "historical_result_revisions_year_check",
+      sql`${table.year} between 1788 and 2100`,
+    ),
+    check(
+      "historical_result_revisions_state_check",
+      sql`length(${table.stateCode}) = 2`,
+    ),
+    check(
+      "historical_result_revisions_votes_check",
+      sql`${table.totalVotes} >= 0 and ${table.unattributedVotes} >= 0 and ${table.unattributedVotes} <= ${table.totalVotes}`,
+    ),
+    check(
+      "historical_result_revisions_json_check",
+      sql`jsonb_typeof(${table.candidates}) = 'array' and jsonb_typeof(${table.sourceVersions}) = 'array'`,
+    ),
+    check(
+      "historical_result_revisions_margin_status_check",
+      sql`${table.marginStatus} in ('eligible', 'excluded')`,
+    ),
+    check(
+      "historical_result_revisions_margin_shape_check",
+      sql`(${table.marginStatus} = 'eligible' and ${table.leadingCandidate} is not null and ${table.marginVotes} is not null and ${table.marginShare} is not null and ${table.exclusionReason} is null and ${table.marginVotes} >= 0 and ${table.marginShare} between 0 and 1) or (${table.marginStatus} = 'excluded' and ${table.leadingCandidate} is null and ${table.marginVotes} is null and ${table.marginShare} is null and ${table.exclusionReason} is not null)`,
+    ),
   ],
 );
 

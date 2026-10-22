@@ -1,7 +1,13 @@
 import { readObservatoryArticlePage } from "@/infrastructure/database/article-repository";
+import { readNewsCoverage } from "@/infrastructure/database/news-coverage-repository";
+import {
+  listPublishedModelQuestions,
+  readPublishedModel,
+} from "@/infrastructure/database/published-model";
 import {
   readObservatoryPollPage,
   readObservatorySources,
+  readPollEditorialHistory,
   readPollRevisionHistory,
 } from "@/infrastructure/database/observatory-repository";
 import { getRuntimeDatabase } from "@/infrastructure/database/runtime";
@@ -11,8 +17,10 @@ import type {
   ObservatoryPoll,
   ObservatorySourceSummary,
   PollReadInput,
+  PollEditorialHistoryEntry,
   PollRevisionHistoryEntry,
 } from "@/platform/observatory/read-contracts";
+import type { NewsCoverage } from "@/platform/observatory/news-coverage";
 import {
   utcInstantSchema,
   type EditionScope,
@@ -113,6 +121,40 @@ export function readPublicPollHistory(
       staleAfterMinutes,
     }),
   );
+}
+
+export function readPublicPollEditorialHistory(
+  scope: EditionScope,
+  pollId: string,
+  asOf: string,
+): Promise<PublicRead<ObservatoryPage<PollEditorialHistoryEntry>>> {
+  return read((db) =>
+    readPollEditorialHistory(db, {
+      scope,
+      pollId,
+      asOf,
+      limit: 100,
+      staleAfterMinutes,
+    }),
+  );
+}
+
+export function readPublicNewsCoverage(
+  scope: EditionScope,
+  asOf: string,
+): Promise<PublicRead<NewsCoverage>> {
+  return read((db) => readNewsCoverage(db, { scope, asOf, days: 14 }));
+}
+
+export function readPublicModelQuestions(scope: EditionScope) {
+  return read((db) => listPublishedModelQuestions(db, { scope, limit: 20 }));
+}
+
+export function readPublicPublishedModel(
+  scope: EditionScope,
+  questionId: string,
+) {
+  return read((db) => readPublishedModel(db, { scope, questionId }));
 }
 
 export const publicPollFreshnessMinutes = staleAfterMinutes;

@@ -5,6 +5,7 @@ import {
   parseMedslSenateCsv,
   senateResultAvailableAt,
 } from "../../src/integrations/medsl/senate";
+import { prepareSenateResults } from "../../src/integrations/medsl/prepared-import";
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -18,6 +19,17 @@ const fixture = readFileSync(
 
 describe("MEDSL Senate V8 original CSV parser", () => {
   const results = parseMedslSenateCsv(fixture);
+
+  it("prepares stable hashes and refuses duplicate contest identities", () => {
+    const first = prepareSenateResults(results);
+    const second = prepareSenateResults(results);
+    expect(first.map((row) => row.contentHash)).toEqual(
+      second.map((row) => row.contentHash),
+    );
+    expect(() => prepareSenateResults([...results, results[0]!])).toThrow(
+      "Duplicate",
+    );
+  });
 
   it("keeps general, runoff and special contests separate", () => {
     expect(results).toHaveLength(5);

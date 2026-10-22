@@ -91,6 +91,10 @@ export default async function EditionPage({ params, searchParams }: Props) {
               : ("unavailable" as const),
           acquiredAt: null,
         };
+  const includedPolls =
+    polls.status === "ready"
+      ? polls.value.items.filter((poll) => poll.currentLinkIncluded).length
+      : 0;
   const view = (id: string) =>
     catalog.viewsForEdition(section, edition).find((item) => item.id === id)!;
   return (
@@ -119,13 +123,13 @@ export default async function EditionPage({ params, searchParams }: Props) {
           <MetricCard
             title="Sondaggi acquisiti"
             state={
-              polls.status === "ready" && polls.value.items.length > 0
+              polls.status === "ready" && includedPolls > 0
                 ? {
                     status: "ready",
                     value: {
                       kind: "vote_intention",
                       label: "Studi nella prima pagina",
-                      valueText: String(polls.value.items.length),
+                      valueText: String(includedPolls),
                       detail: "Non sono probabilità di vittoria",
                     },
                   }
@@ -133,7 +137,7 @@ export default async function EditionPage({ params, searchParams }: Props) {
                     status: polls.status === "error" ? "error" : "empty",
                     message:
                       polls.status === "ready"
-                        ? "Nessun sondaggio acquisito."
+                        ? "Nessun sondaggio attualmente incluso nella prima pagina."
                         : polls.message,
                   }
             }
@@ -165,8 +169,10 @@ export default async function EditionPage({ params, searchParams }: Props) {
             polls.status === "ready"
               ? {
                   status: "ready",
-                  value: pollRows(polls.value.items, (id) =>
-                    `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
+                  value: pollRows(
+                    polls.value.items,
+                    (id) =>
+                      `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
                   ),
                 }
               : {
@@ -248,4 +254,3 @@ export default async function EditionPage({ params, searchParams }: Props) {
     </>
   );
 }
-

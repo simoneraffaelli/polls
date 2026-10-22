@@ -9,12 +9,14 @@ import {
   midtermsPollHistoryPath,
   midtermsRacePath,
   midtermsRaces,
+  validPublicUuid,
 } from "@/composition/catalog";
 import {
   parsePublicAsOf,
   parsePublicOffset,
   publicPollFreshnessMinutes,
   readPublicArticles,
+  readPublicNewsCoverage,
   readPublicPolls,
   readPublicSources,
 } from "@/composition/observatory";
@@ -39,6 +41,7 @@ import { NewsList } from "@/ui/patterns/news-list";
 import { TimeSeriesChart } from "@/ui/patterns/time-series-chart";
 import { SourceList } from "@/ui/patterns/source-list";
 import { DataNotice } from "@/ui/patterns/data-notice";
+import { NewsCoverage } from "@/ui/patterns/news-coverage";
 
 type Route = {
   countrySlug: string;
@@ -199,7 +202,7 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
     const toDate = one(query.to);
     const race = one(query.race);
     if (
-      (sourceId && !/^[a-f0-9-]{36}$/.test(sourceId)) ||
+      (sourceId && !validPublicUuid(sourceId)) ||
       (populationKind &&
         !["likely_voters", "registered_voters", "adults", "other"].includes(
           populationKind,
@@ -226,8 +229,10 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
       polls.status === "ready"
         ? {
             status: "ready",
-            value: pollRows(polls.value.items, (id) =>
-              `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
+            value: pollRows(
+              polls.value.items,
+              (id) =>
+                `${midtermsPollHistoryPath(section, edition, id)}?asOf=${encodeURIComponent(asOf)}`,
             ),
           }
         : {
@@ -336,11 +341,20 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
             unit="Percentuale del campione"
             state={seriesState}
           />
+          {series.length ? (
+            <p className="section-intro">
+              La serie usa soltanto gli studi della pagina corrente (massimo
+              25); non rappresenta l’intero archivio.
+            </p>
+          ) : null}
         </section>
       </>
     );
   } else if (viewId === "view:us:midterms:2026:news") {
-    const articles = await readPublicArticles(scope, asOf, offset);
+    const [articles, coverage] = await Promise.all([
+      readPublicArticles(scope, asOf, offset),
+      readPublicNewsCoverage(scope, asOf),
+    ]);
     const listState: Availability<readonly NewsItem[]> =
       articles.status === "ready"
         ? { status: "ready", value: newsItems(articles.value.items) }
@@ -349,27 +363,50 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
             message: articles.message,
           };
     body = (
-      <section className="content-section" aria-labelledby="news-title">
-        <h2 className="section-heading" id="news-title">
-          Documenti dalle fonti
-        </h2>
-        <p className="section-intro">
-          Il feed della Federal Reserve contiene comunicazioni istituzionali
-          economiche. Non misura la copertura elettorale né l’opinione degli
-          elettori.
-        </p>
-        <NewsList state={listState} />
-        {articles.status === "ready" &&
-        articles.value.hasMore &&
-        articles.value.nextOffset !== null ? (
-          <Link
-            className="page-link"
-            href={queryPath(path, { asOf, offset: articles.value.nextOffset })}
+      <>
+        <section className="content-section" aria-labelledby="news-title">
+          <h2 className="section-heading" id="news-title">
+            Documenti dalle fonti
+          </h2>
+          <p className="section-intro">
+            Il feed della Federal Reserve contiene comunicazioni istituzionali
+            economiche. Non misura la copertura elettorale né l’opinione degli
+            elettori.
+          </p>
+          <NewsList state={listState} />
+          {articles.status === "ready" &&
+          articles.value.hasMore &&
+          articles.value.nextOffset !== null ? (
+            <Link
+              className="page-link"
+              href={queryPath(path, {
+                asOf,
+                offset: articles.value.nextOffset,
+              })}
+            >
+              Altri documenti
+            </Link>
+          ) : null}
+        </section>
+        {coverage.status === "ready" ? (
+          <NewsCoverage coverage={coverage.value} />
+        ) : (
+          <section
+            className="content-section"
+            aria-labelledby="news-coverage-title"
           >
-            Altri documenti
-          </Link>
-        ) : null}
-      </section>
+            <h2 id="news-coverage-title" className="section-heading">
+              Copertura raccolta
+            </h2>
+            <DataNotice
+              state={{
+                status: coverage.status === "error" ? "error" : "empty",
+                message: coverage.message,
+              }}
+            />
+          </section>
+        )}
+      </>
     );
   } else if (viewId === "view:us:midterms:2026:sources") {
     body = (
@@ -448,4 +485,3 @@ export default async function EditionViewPage({ params, searchParams }: Props) {
     </>
   );
 }
-

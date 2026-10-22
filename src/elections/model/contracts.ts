@@ -19,6 +19,11 @@ export type RaceModelInput = Readonly<{
 export type PollModelInput = Readonly<{
   signalId: string;
   revisionId: string;
+  pollLinkId: string;
+  optionMappingId: string;
+  externalQuestionId: string;
+  positiveOptionId: string;
+  negativeOptionId: string;
   raceId: string;
   pollsterId: string;
   sampleGroupId: string;
@@ -61,6 +66,8 @@ export type ModelSnapshot = Readonly<{
   inputAsOf: string;
   cutoffAt: string;
   catalogVersion: string;
+  structuralReferenceId: string;
+  qualityPolicyVersion: "poll-quality-v1";
   modelVersion: string;
   parameterVersion: string;
   parameters: BaselineParameters;

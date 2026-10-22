@@ -11,6 +11,10 @@
     "outDir": "dist-worker",
     "types": ["node"]
   },
-  "include": ["src/worker/**/*.ts", "src/infrastructure/config/**/*.ts"],
+  "include": [
+    "src/worker/**/*.ts",
+    "src/composition/seed-cli.ts",
+    "src/infrastructure/config/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

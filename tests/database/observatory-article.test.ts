@@ -12,6 +12,7 @@ import {
 } from "../../src/infrastructure/database/article-repository";
 import { beginCollectionRun } from "../../src/infrastructure/database/collection-repository";
 import { readObservatorySources } from "../../src/infrastructure/database/observatory-repository";
+import { readNewsCoverage } from "../../src/infrastructure/database/news-coverage-repository";
 import {
   collectionRuns,
   configuredSources,
@@ -168,5 +169,34 @@ describe("article collection and bounded observatory reads", () => {
         })
       ).items[0]?.source.state.status,
     ).toBe("paused");
+    const coverage = await readNewsCoverage(database.db, {
+      scope: us2026,
+      asOf: new Date(Date.parse(acquiredAt) + 1000).toISOString(),
+    });
+    expect(coverage.rows).toEqual([
+      {
+        sourceId,
+        sourceName: expect.any(String),
+        topic: null,
+        day: acquiredAt.slice(0, 10),
+        articles: 1,
+      },
+    ]);
+    expect(
+      (
+        await readNewsCoverage(database.db, {
+          scope: us2026,
+          asOf: new Date(Date.parse(acquiredAt) - 1).toISOString(),
+        })
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await readNewsCoverage(database.db, {
+          scope: { ...us2026, editionId: "edition:unknown" },
+          asOf: new Date(Date.parse(acquiredAt) + 1000).toISOString(),
+        })
+      ).rows,
+    ).toEqual([]);
   });
 });

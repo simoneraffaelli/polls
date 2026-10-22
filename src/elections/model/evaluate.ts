@@ -10,11 +10,45 @@ export type HistoricalAvailability = Readonly<{
   acquiredAt: string;
   evidence:
     "actual_acquisition" | "documented_historical" | "assumed_historical";
-  evidenceReference: string | null;
+  archive: Readonly<{
+    url: string;
+    version: string;
+    sha256: string;
+    availabilityReview: Readonly<{
+      status: "verified";
+      evidenceUrl: string;
+      availableAt: string;
+      reviewedAt: string;
+    }>;
+  }> | null;
+}>;
+
+export type MarketEvaluationEvidence = Readonly<{
+  probability: number;
+  targetOutcomeId: string;
+  contractId: string;
+  outcomeId: string;
+  quoteId: string;
+  priceType: "bid_ask_midpoint";
+  qualityStatus: "eligible";
+  bid: number;
+  ask: number;
+  timestampFormatVerified: boolean;
+  observedAt: string;
+  acquiredAt: string;
+  equivalence: Readonly<{
+    status: "verified";
+    targetOutcomeId: string;
+    marketContractId: string;
+    marketOutcomeId: string;
+    referenceUrl: string;
+    checkedAt: string;
+  }>;
 }>;
 
 export type EvaluationCase = Readonly<{
   caseId: string;
+  targetOutcomeId: string;
   cycleId: string;
   split: "development" | "tuning" | "test";
   electionDate: string;
@@ -29,10 +63,7 @@ export type EvaluationCase = Readonly<{
   upper80: number | null;
   observedSeats: number | null;
   predictedSeats: number | null;
-  market: Readonly<{
-    probability: number;
-    resolutionEquivalent: boolean;
-  }> | null;
+  market: MarketEvaluationEvidence | null;
 }>;
 
 export type CalibrationBin = Readonly<{
@@ -44,12 +75,17 @@ export type CalibrationBin = Readonly<{
 }>;
 
 export type EvaluationReport = Readonly<{
+  /** The pure scorer does not authenticate archives or assign model validation. */
+  evidenceAudit: "external_review_required";
   cases: number;
   cycles: number;
   brier: number;
   baselineBrier: number;
-  brierDifferenceByCycle: number;
-  brierDifference95: readonly [number, number] | null;
+  /** Per-case difference; comparable to brier - baselineBrier. */
+  brierDifferencePerCase: number;
+  /** Equal weight per election cycle, regardless of the number of cases. */
+  brierDifferencePerCycle: number;
+  brierDifferencePerCycle95: readonly [number, number] | null;
   logLoss: number;
   baselineLogLoss: number;
   expectedCalibrationError: number;
@@ -69,6 +105,80 @@ const logLoss = (probability: number, outcome: 0 | 1) => {
 };
 const average = (values: readonly number[]) =>
   values.reduce((sum, value) => sum + value, 0) / values.length;
+const validId = (value: unknown) =>
+  typeof value === "string" &&
+  value.trim() === value &&
+  value.length > 0 &&
+  value.length <= 200;
+
+function httpsReference(value: unknown): boolean {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !!url.hostname &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function safeTimestamp(value: unknown): number | null {
+  if (
+    typeof value !== "string" ||
+    !utcInstantSchema.safeParse(value).success ||
+    !/(?:Z|\+00:00)$/.test(value)
+  )
+    return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** A market comparison is admitted only for the exact target and a timely, eligible quote. */
+export function isComparableMarket(item: EvaluationCase): boolean {
+  const market = item.market;
+  if (!market) return false;
+  const asOf = safeTimestamp(item.inputAsOf);
+  const observed = safeTimestamp(market.observedAt);
+  const acquired = safeTimestamp(market.acquiredAt);
+  const checked = safeTimestamp(market.equivalence?.checkedAt);
+  return !!(
+    asOf !== null &&
+    observed !== null &&
+    acquired !== null &&
+    checked !== null &&
+    validId(item.targetOutcomeId) &&
+    validId(market.contractId) &&
+    validId(market.outcomeId) &&
+    validId(market.quoteId) &&
+    market.targetOutcomeId === item.targetOutcomeId &&
+    market.equivalence.status === "verified" &&
+    market.equivalence.targetOutcomeId === item.targetOutcomeId &&
+    market.equivalence.marketContractId === market.contractId &&
+    market.equivalence.marketOutcomeId === market.outcomeId &&
+    httpsReference(market.equivalence.referenceUrl) &&
+    checked <= asOf &&
+    market.priceType === "bid_ask_midpoint" &&
+    market.timestampFormatVerified === true &&
+    Number.isFinite(market.bid) &&
+    Number.isFinite(market.ask) &&
+    market.bid >= 0 &&
+    market.bid <= market.ask &&
+    market.ask <= 1 &&
+    market.ask - market.bid <= 0.05 + 1e-9 &&
+    Math.abs(market.probability - (market.bid + market.ask) / 2) <= 1e-9 &&
+    market.qualityStatus === "eligible" &&
+    Number.isFinite(market.probability) &&
+    market.probability >= 0 &&
+    market.probability <= 1 &&
+    observed <= acquired &&
+    acquired <= asOf &&
+    asOf - observed <= 30 * 60_000
+  );
+}
 
 function timestamp(value: string, field: string): number {
   const parsed = Date.parse(value);
@@ -82,14 +192,19 @@ function timestamp(value: string, field: string): number {
   return parsed;
 }
 
-/** Reject leakage before any score is computed. One cycle belongs to one split. */
+/** Checks declared chronology and provenance shape, not the truth of external evidence. */
 export function assertCausalEvaluation(cases: readonly EvaluationCase[]): void {
   if (cases.length === 0) throw new Error("Evaluation needs cases");
   const splits = new Map<string, EvaluationCase["split"]>();
   const caseIds = new Set<string>();
   const datesBySplit = new Map<EvaluationCase["split"], number[]>();
   for (const item of cases) {
-    if (!item.caseId || !item.cycleId || caseIds.has(item.caseId))
+    if (
+      !validId(item.caseId) ||
+      !validId(item.cycleId) ||
+      !validId(item.targetOutcomeId) ||
+      caseIds.has(item.caseId)
+    )
       throw new Error("Missing or duplicate evaluation case");
     if (!["development", "tuning", "test"].includes(item.split))
       throw new Error("Unknown evaluation split");
@@ -133,6 +248,8 @@ export function assertCausalEvaluation(cases: readonly EvaluationCase[]): void {
         throw new Error("Historical input was unavailable as of prediction");
       }
       const acquired = timestamp(input.acquiredAt, "acquiredAt");
+      if (acquired < timestamp(input.availableAt, "availableAt"))
+        throw new Error("Historical acquisition precedes availability");
       if (
         ![
           "actual_acquisition",
@@ -151,15 +268,31 @@ export function assertCausalEvaluation(cases: readonly EvaluationCase[]): void {
       }
       if (
         input.evidence === "documented_historical" &&
-        !input.evidenceReference
+        (!input.archive ||
+          !httpsReference(input.archive.url) ||
+          !validId(input.archive.version) ||
+          !/^[a-f0-9]{64}$/.test(input.archive.sha256) ||
+          input.archive.availabilityReview?.status !== "verified" ||
+          !httpsReference(input.archive.availabilityReview.evidenceUrl) ||
+          input.archive.availabilityReview.availableAt !== input.availableAt ||
+          timestamp(input.archive.availabilityReview.reviewedAt, "reviewedAt") <
+            timestamp(
+              input.archive.availabilityReview.availableAt,
+              "reviewed availability",
+            ))
       ) {
-        throw new Error("Historical availability needs documentary evidence");
+        throw new Error(
+          "Historical availability needs reviewed archive provenance",
+        );
       }
+      if (input.evidence === "actual_acquisition" && input.archive !== null)
+        throw new Error(
+          "Actual acquisition must not claim an archive reconstruction",
+        );
     }
     for (const probability of [
       item.probability,
       item.baselineProbability,
-      item.market?.probability,
     ].filter((value) => value !== undefined)) {
       if (!Number.isFinite(probability) || probability < 0 || probability > 1)
         throw new Error("Probability must be a fraction in [0, 1]");
@@ -280,18 +413,22 @@ export function evaluateHeldOut(
   const seats = heldOut.filter(
     (item) => item.observedSeats !== null && item.predictedSeats !== null,
   );
-  const markets = heldOut.filter((item) => item.market?.resolutionEquivalent);
+  const markets = heldOut.filter(isComparableMarket);
+  const brierScore = average(
+    heldOut.map((item) => brier(item.probability, item.outcome)),
+  );
+  const baselineBrierScore = average(
+    heldOut.map((item) => brier(item.baselineProbability, item.outcome)),
+  );
   return {
+    evidenceAudit: "external_review_required",
     cases: heldOut.length,
     cycles: byCycle.size,
-    brier: average(
-      heldOut.map((item) => brier(item.probability, item.outcome)),
-    ),
-    baselineBrier: average(
-      heldOut.map((item) => brier(item.baselineProbability, item.outcome)),
-    ),
-    brierDifferenceByCycle: differenceByCycle,
-    brierDifference95: confidence,
+    brier: brierScore,
+    baselineBrier: baselineBrierScore,
+    brierDifferencePerCase: brierScore - baselineBrierScore,
+    brierDifferencePerCycle: differenceByCycle,
+    brierDifferencePerCycle95: confidence,
     logLoss: average(
       heldOut.map((item) => logLoss(item.probability, item.outcome)),
     ),

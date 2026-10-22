@@ -3,6 +3,7 @@ import type { ModelSnapshot } from "@/elections/model/contracts";
 import {
   assertCausalEvaluation,
   evaluateHeldOut,
+  isComparableMarket,
   type EvaluationCase,
 } from "@/elections/model/evaluate";
 import { snapshotDigest } from "@/elections/model/snapshot-hash";
@@ -22,6 +23,8 @@ const input: ModelSnapshot = {
   inputAsOf: "2026-10-22T12:00:00Z",
   cutoffAt: "2026-11-03T00:00:00Z",
   catalogVersion: "catalog-v1",
+  structuralReferenceId: "22222222-2222-4222-8222-222222222222",
+  qualityPolicyVersion: "poll-quality-v1",
   modelVersion: "midterms-baseline-v1",
   parameterVersion: MIDTERMS_BASELINE_PARAMETERS.version,
   parameters: MIDTERMS_BASELINE_PARAMETERS,
@@ -63,6 +66,7 @@ const evaluationCase = (
   split: EvaluationCase["split"],
 ): EvaluationCase => ({
   caseId: `case:${year}`,
+  targetOutcomeId: "outcome:yes",
   cycleId: `cycle:${year}`,
   split,
   electionDate: `${year}-11-03`,
@@ -75,7 +79,7 @@ const evaluationCase = (
       availableAt: `${year}-09-30T00:00:00Z`,
       acquiredAt: `${year}-09-30T00:00:00Z`,
       evidence: "actual_acquisition",
-      evidenceReference: null,
+      archive: null,
     },
   ],
   probability: 0.7,
@@ -85,7 +89,28 @@ const evaluationCase = (
   upper80: 3,
   observedSeats: 2,
   predictedSeats: 2,
-  market: { probability: 0.6, resolutionEquivalent: true },
+  market: {
+    probability: 0.6,
+    targetOutcomeId: "outcome:yes",
+    contractId: "contract:sample",
+    outcomeId: "market:yes",
+    quoteId: `quote:${year}`,
+    priceType: "bid_ask_midpoint",
+    qualityStatus: "eligible",
+    bid: 0.59,
+    ask: 0.61,
+    timestampFormatVerified: true,
+    observedAt: `${year}-10-01T11:40:00Z`,
+    acquiredAt: `${year}-10-01T11:45:00Z`,
+    equivalence: {
+      status: "verified",
+      targetOutcomeId: "outcome:yes",
+      marketContractId: "contract:sample",
+      marketOutcomeId: "market:yes",
+      referenceUrl: "https://example.org/rules/verified",
+      checkedAt: `${year}-09-30T00:00:00Z`,
+    },
+  },
 });
 
 describe("published-run scenarios", () => {
@@ -208,10 +233,12 @@ describe("causal held-out evaluation", () => {
     ];
     const report = evaluateHeldOut(cases, "bootstrap-v1", 1000);
     expect(report.cases).toBe(3);
+    expect(report.evidenceAudit).toBe("external_review_required");
     expect(report.cycles).toBe(3);
     expect(report.brier).toBeCloseTo(0.09);
     expect(report.baselineBrier).toBe(0.25);
-    expect(report.brierDifference95?.[1]).toBeLessThan(0);
+    expect(report.brierDifferencePerCase).toBeCloseTo(-0.16);
+    expect(report.brierDifferencePerCycle95?.[1]).toBeLessThan(0);
     expect(report.interval80Coverage).toBe(1);
     expect(report.seatMeanAbsoluteError).toBe(0);
     expect(report.marketComparableCases).toBe(3);
@@ -243,11 +270,62 @@ describe("causal held-out evaluation", () => {
           ...past.inputs[0],
           evidence: "documented_historical" as const,
           acquiredAt: "2026-10-01T00:00:00Z",
-          evidenceReference: null,
+          archive: null,
         },
       ],
     };
-    expect(() => assertCausalEvaluation([documented])).toThrow(/documentary/);
+    expect(() => assertCausalEvaluation([documented])).toThrow(
+      /archive provenance/,
+    );
+    const reviewed = {
+      ...documented,
+      inputs: [
+        {
+          ...documented.inputs[0],
+          archive: {
+            url: "https://archive.example.org/polls/2024",
+            version: "2024-09-30-v1",
+            sha256: "a".repeat(64),
+            availabilityReview: {
+              status: "verified" as const,
+              evidenceUrl: "https://archive.example.org/polls/2024/metadata",
+              availableAt: past.inputs[0]!.availableAt,
+              reviewedAt: "2026-10-01T00:00:00Z",
+            },
+          },
+        },
+      ],
+    };
+    expect(() => assertCausalEvaluation([reviewed])).not.toThrow();
+    expect(() =>
+      assertCausalEvaluation([
+        {
+          ...reviewed,
+          inputs: [
+            {
+              ...reviewed.inputs[0],
+              archive: { ...reviewed.inputs[0].archive, sha256: "unreviewed" },
+            },
+          ],
+        },
+      ]),
+    ).toThrow(/archive provenance/);
+    expect(() =>
+      assertCausalEvaluation([
+        {
+          ...reviewed,
+          inputs: [
+            {
+              ...reviewed.inputs[0],
+              archive: {
+                ...reviewed.inputs[0].archive,
+                url: "http://archive.example.org/polls",
+              },
+            },
+          ],
+        },
+      ]),
+    ).toThrow(/archive provenance/);
     expect(() =>
       assertCausalEvaluation([{ ...past, inputAsOf: "2024-11-03T12:00:00Z" }]),
     ).toThrow(/cutoff/);
@@ -282,5 +360,67 @@ describe("causal held-out evaluation", () => {
         { ...evaluationCase(2022, "tuning"), cycleId: "same" },
       ]),
     ).toThrow(/more than one split/);
+  });
+
+  it("distinguishes per-case Brier from equal-weight per-cycle bootstrap when cycle sizes differ", () => {
+    const sparse = [2020, 2022].map((year) => ({
+      ...evaluationCase(year, "test"),
+      outcome: 0 as const,
+      probability: 1,
+      baselineProbability: 0,
+    }));
+    const dense = Array.from({ length: 20 }, (_, index) => ({
+      ...evaluationCase(2024, "test"),
+      caseId: `dense:${index}`,
+      outcome: 0 as const,
+      probability: 0,
+      baselineProbability: Math.sqrt(0.2),
+    }));
+    const report = evaluateHeldOut(
+      [...sparse, ...dense],
+      "unequal-cycles",
+      1000,
+    );
+    expect(report.brierDifferencePerCase).toBeCloseTo(-2 / 22);
+    expect(report.brierDifferencePerCycle).toBeCloseTo(0.6);
+    expect(report.brierDifferencePerCycle95).not.toBeNull();
+  });
+
+  it("excludes mismatched, stale or unverified market quotes without inventing a comparison", () => {
+    const base = evaluationCase(2024, "test");
+    expect(isComparableMarket(base)).toBe(true);
+    const opposite = {
+      ...base,
+      market: { ...base.market!, outcomeId: "market:no" },
+    };
+    const stale = {
+      ...base,
+      market: { ...base.market!, observedAt: "2024-10-01T11:00:00Z" },
+    };
+    const late = {
+      ...base,
+      market: { ...base.market!, acquiredAt: "2024-10-01T12:01:00Z" },
+    };
+    const unverified = {
+      ...base,
+      market: {
+        ...base.market!,
+        equivalence: {
+          ...base.market!.equivalence,
+          status: "unverified" as "verified",
+        },
+      },
+    };
+    const wide = {
+      ...base,
+      market: { ...base.market!, bid: 0.4, ask: 0.6 },
+    };
+    const missing = { ...base, market: null };
+    for (const item of [opposite, stale, late, unverified, wide, missing]) {
+      expect(isComparableMarket(item)).toBe(false);
+      expect(
+        evaluateHeldOut([item], "market-gate", 100).marketComparableCases,
+      ).toBe(0);
+    }
   });
 });

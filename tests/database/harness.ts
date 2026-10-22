@@ -35,7 +35,9 @@ function requiredTestDatabaseUrl(): string {
 const schemaName = (prefix: string) =>
   `${prefix}_${randomBytes(8).toString("hex")}`;
 
-export async function createIsolatedDatabase() {
+export async function createIsolatedDatabase(
+  options: { migrationsFolder?: string } = {},
+) {
   const connectionString = requiredTestDatabaseUrl();
   const dataSchema = schemaName("polls_test_data");
   const migrationsSchema = schemaName("polls_test_migrations");
@@ -57,9 +59,12 @@ export async function createIsolatedDatabase() {
     ).rows;
     if (searchPath !== dataSchema)
       throw new Error("Database test search_path was not isolated");
-    await applyMigrations(database.pool, { migrationsSchema });
+    await applyMigrations(database.pool, { migrationsSchema, ...options });
     return {
       ...database,
+      async upgrade() {
+        await applyMigrations(database.pool, { migrationsSchema });
+      },
       async cleanup() {
         await database.close();
         await controlPool.query(

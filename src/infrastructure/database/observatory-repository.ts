@@ -8,6 +8,7 @@ import type {
   ObservatoryReadInput,
   PollReadInput,
   PollRevisionHistoryEntry,
+  PollEditorialHistoryEntry,
   SourceState,
 } from "../../platform/observatory/read-contracts";
 import {
@@ -21,6 +22,7 @@ import { pollOptions, pollQuestions } from "./schema";
 
 type PollRow = {
   poll_id: string;
+  link_id: string;
   revision_id: string;
   revision_no: number;
   race_id: string | null;
@@ -43,6 +45,8 @@ type PollRow = {
   last_run_status: string | null;
   last_error_code: string | null;
   source_last_acquired_epoch_ms: string | null;
+  current_link_included: boolean | null;
+  poll_excluded: boolean | null;
 };
 
 export function sourceState(input: {
@@ -160,7 +164,7 @@ export async function readObservatoryPollPage(
     : sql``;
   const result = await db.execute(sql`
     SELECT
-      record.id AS poll_id, revision.id AS revision_id,
+      record.id AS poll_id, link.id AS link_id, revision.id AS revision_id,
       revision.revision_no, link.race_id, revision.pollster,
       revision.sponsors, revision.fieldwork_start::text AS fieldwork_start,
       revision.fieldwork_end::text AS fieldwork_end,
@@ -174,7 +178,9 @@ export async function readObservatoryPollPage(
       binding.enabled AS binding_enabled,
       last_run.status AS last_run_status,
       last_run.error_code AS last_error_code,
-      (floor(extract(epoch from last_success.page_acquired_at) * 1000))::bigint AS source_last_acquired_epoch_ms
+      (floor(extract(epoch from last_success.page_acquired_at) * 1000))::bigint AS source_last_acquired_epoch_ms,
+      link_decision.included AS current_link_included,
+      poll_exclusion.excluded AS poll_excluded
     FROM poll_edition_links link
     JOIN editions edition ON edition.id = link.edition_id
       AND edition.section_id = ${scope.sectionId}
@@ -187,6 +193,17 @@ export async function readObservatoryPollPage(
       ORDER BY revision.revision_no DESC LIMIT 1
     ) revision ON TRUE
     JOIN configured_sources source ON source.id = record.source_id
+    LEFT JOIN LATERAL (
+      SELECT included FROM poll_link_decisions decision
+      WHERE decision.poll_link_id = link.id AND decision.recorded_at <= ${asOf}
+      ORDER BY decision.recorded_at DESC, decision.id DESC LIMIT 1
+    ) link_decision ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT excluded FROM poll_forecast_exclusions exclusion
+      WHERE exclusion.poll_id = record.id AND exclusion.edition_id = link.edition_id
+        AND exclusion.recorded_at <= ${asOf}
+      ORDER BY exclusion.recorded_at DESC, exclusion.id DESC LIMIT 1
+    ) poll_exclusion ON TRUE
     LEFT JOIN source_section_bindings binding
       ON binding.source_id = source.id AND binding.section_id = ${scope.sectionId}
     LEFT JOIN LATERAL (
@@ -202,7 +219,7 @@ export async function readObservatoryPollPage(
         AND run.page_acquired_at <= ${asOf}
       ORDER BY run.page_acquired_at DESC, run.id DESC LIMIT 1
     ) last_success ON TRUE
-    WHERE link.edition_id = ${scope.editionId} ${racePredicate}
+    WHERE link.edition_id = ${scope.editionId} AND link.created_at <= ${asOf} ${racePredicate}
       ${sourcePredicate} ${populationPredicate} ${fromPredicate} ${toPredicate}
     ORDER BY revision.acquired_at DESC, record.id DESC
     LIMIT ${input.limit + 1} OFFSET ${offset}
@@ -245,6 +262,7 @@ export async function readObservatoryPollPage(
     };
     return {
       pollId: row.poll_id,
+      linkId: row.link_id,
       revisionId: row.revision_id,
       revisionNo: row.revision_no,
       raceId: row.race_id,
@@ -259,6 +277,18 @@ export async function readObservatoryPollPage(
             null),
       acquiredAt: requiredRawInstant(row.acquired_epoch_ms).toISOString(),
       sourceUrl: row.source_url,
+      currentLinkIncluded: row.current_link_included ?? true,
+      linkDecisionReason:
+        row.current_link_included === false
+          ? ("association_superseded" as const)
+          : null,
+      excludedFromFutureForecasts:
+        row.excluded_from_forecasts ||
+        (row.poll_excluded ?? false) ||
+        row.current_link_included === false,
+      pollExclusionReason: row.poll_excluded
+        ? ("poll_excluded_from_future_forecasts" as const)
+        : null,
       source,
       questions: questions
         .filter(
@@ -448,6 +478,7 @@ export async function readPollRevisionHistory(
       SELECT 1 FROM poll_edition_links link
       JOIN editions edition ON edition.id = link.edition_id
       WHERE link.poll_id = record.id AND link.edition_id = ${scope.editionId}
+        AND link.created_at <= ${asOf}
         AND edition.section_id = ${scope.sectionId}
     )
     ORDER BY revision.revision_no DESC
@@ -466,6 +497,60 @@ export async function readPollRevisionHistory(
     acquiredAt: requiredRawInstant(row.acquired_epoch_ms).toISOString(),
     fieldworkStart: row.fieldwork_start,
     fieldworkEnd: row.fieldwork_end,
+  }));
+  const truncated = hasMore && offset + items.length > 10_000;
+  return {
+    items,
+    hasMore,
+    truncated,
+    nextOffset: hasMore && !truncated ? offset + items.length : null,
+  };
+}
+
+/** Public editorial trail omits actor identity; admin audit retains the actor. */
+export async function readPollEditorialHistory(
+  db: Database,
+  input: ObservatoryReadInput & Readonly<{ pollId: string }>,
+): Promise<ObservatoryPage<PollEditorialHistoryEntry>> {
+  const { scope, asOf, offset } = validateRead(input);
+  const pollId = z.uuid().parse(input.pollId);
+  const result = await db.execute(sql`
+    SELECT decision.id, decision.kind, decision.link_id,
+      decision.value,
+      (floor(extract(epoch from decision.recorded_at) * 1000))::bigint AS recorded_epoch_ms
+    FROM (
+      SELECT item.id, 'forecast_exclusion' AS kind, NULL::uuid AS link_id,
+        item.excluded AS value, item.recorded_at
+      FROM poll_forecast_exclusions item
+      WHERE item.poll_id = ${pollId} AND item.edition_id = ${scope.editionId}
+        AND item.recorded_at <= ${asOf}
+      UNION ALL
+      SELECT item.id, 'association' AS kind, item.poll_link_id AS link_id,
+        item.included AS value, item.recorded_at
+      FROM poll_link_decisions item
+      JOIN poll_edition_links link ON link.id = item.poll_link_id
+      WHERE item.poll_id = ${pollId} AND item.edition_id = ${scope.editionId}
+        AND item.recorded_at <= ${asOf} AND link.created_at <= ${asOf}
+    ) decision
+    JOIN editions edition ON edition.id = ${scope.editionId}
+      AND edition.section_id = ${scope.sectionId}
+    ORDER BY decision.recorded_at DESC, decision.id DESC
+    LIMIT ${input.limit + 1} OFFSET ${offset}
+  `);
+  const rows = result.rows as {
+    id: string;
+    kind: string;
+    link_id: string | null;
+    value: boolean;
+    recorded_epoch_ms: string;
+  }[];
+  const hasMore = rows.length > input.limit;
+  const items = rows.slice(0, input.limit).map((row) => ({
+    id: row.id,
+    kind: z.enum(["forecast_exclusion", "association"]).parse(row.kind),
+    linkId: row.link_id,
+    value: row.value,
+    recordedAt: requiredRawInstant(row.recorded_epoch_ms).toISOString(),
   }));
   const truncated = hasMore && offset + items.length > 10_000;
   return {

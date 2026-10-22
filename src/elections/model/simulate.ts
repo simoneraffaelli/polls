@@ -1,7 +1,10 @@
 import type {
   ControlDefinition,
+  BaselineParameters,
+  ModelDiagnostics,
   ModelResult,
   ModelSnapshot,
+  RaceEstimate,
   SeatSummary,
 } from "./contracts";
 import { aggregateRaces } from "./aggregate";
@@ -22,10 +25,12 @@ function controlOutcome(
   unknownSeats: number,
   rule: ControlDefinition,
 ): string {
+  const prefix =
+    rule.outcomeKind === "chamber_control" ? "control" : "majority";
   const majority = [...counts].find(
     ([, count]) => count >= rule.majorityThreshold,
   );
-  if (majority) return `majority:${majority[0]}`;
+  if (majority) return `${prefix}:${majority[0]}`;
   if (unknownSeats > 0) return "unresolved";
   if (rule.tieAt !== null && rule.tieRuleVerified && rule.tieBreakerCaucusId) {
     const entries = [...counts];
@@ -33,7 +38,7 @@ function controlOutcome(
       entries.length === 2 &&
       entries.every(([, count]) => count === rule.tieAt)
     ) {
-      return `majority:${rule.tieBreakerCaucusId}`;
+      return `${prefix}:${rule.tieBreakerCaucusId}`;
     }
   }
   return "no_majority";
@@ -45,7 +50,42 @@ export function simulateBaseline(
   iterations: number,
   options: Readonly<{ uniformSwingPoints?: number }> = {},
 ): ModelResult {
-  const swingPoints = options.uniformSwingPoints ?? 0;
+  const { estimates, diagnostics } = aggregateRaces(snapshot);
+  return simulateEstimates({
+    modelVersion: snapshot.modelVersion,
+    parameters: snapshot.parameters,
+    seed: snapshot.seed,
+    estimates,
+    diagnostics,
+    control: snapshot.control,
+    iterations,
+    ...options,
+  });
+}
+
+/** Shared simulation kernel for a sealed run and its public aggregate basis. */
+export function simulateEstimates(
+  input: Readonly<{
+    modelVersion: string;
+    parameters: BaselineParameters;
+    seed: string;
+    estimates: readonly RaceEstimate[];
+    diagnostics: ModelDiagnostics;
+    control: ControlDefinition | null;
+    iterations: number;
+    uniformSwingPoints?: number;
+  }>,
+): ModelResult {
+  const {
+    modelVersion,
+    parameters,
+    seed,
+    estimates,
+    diagnostics,
+    control,
+    iterations,
+  } = input;
+  const swingPoints = input.uniformSwingPoints ?? 0;
   if (!Number.isFinite(swingPoints) || Math.abs(swingPoints) > 5) {
     throw new Error("Uniform swing exceeds model bounds");
   }
@@ -53,12 +93,10 @@ export function simulateBaseline(
     !Number.isInteger(iterations) ||
     iterations < 100 ||
     iterations > 20_000 ||
-    iterations * snapshot.races.length > 5_000_000
+    iterations * estimates.length > 5_000_000
   ) {
     throw new Error("Simulation exceeds iteration or race-work budget");
   }
-  const parameters = snapshot.parameters;
-  const { estimates, diagnostics } = aggregateRaces(snapshot);
   const sortedRaces = [...estimates].sort((a, b) =>
     a.raceId.localeCompare(b.raceId),
   );
@@ -73,7 +111,7 @@ export function simulateBaseline(
     if (race.positive.caucusId) caucusIds.add(race.positive.caucusId);
     if (race.negative.caucusId) caucusIds.add(race.negative.caucusId);
   }
-  for (const holdover of snapshot.control?.holdovers ?? []) {
+  for (const holdover of control?.holdovers ?? []) {
     partyIds.add(holdover.partyId);
     if (holdover.caucusId) caucusIds.add(holdover.caucusId);
   }
@@ -85,9 +123,7 @@ export function simulateBaseline(
   );
   const wins = new Map(sortedRaces.map((race) => [race.raceId, 0]));
   const controls = new Map<string, number>();
-  const normal = seededNormal(
-    `${snapshot.modelVersion}:${snapshot.parameterVersion}:${snapshot.seed}`,
-  );
+  const normal = seededNormal(`${modelVersion}:${parameters.version}:${seed}`);
 
   for (let iteration = 0; iteration < iterations; iteration += 1) {
     const nationalShock = normal() * parameters.nationalErrorSd;
@@ -97,7 +133,7 @@ export function simulateBaseline(
     const partyCounts = new Map([...partySeats.keys()].map((id) => [id, 0]));
     const caucusCounts = new Map([...caucusSeats.keys()].map((id) => [id, 0]));
     let unknownSeats = 0;
-    for (const holdover of snapshot.control?.holdovers ?? []) {
+    for (const holdover of control?.holdovers ?? []) {
       partyCounts.set(
         holdover.partyId,
         (partyCounts.get(holdover.partyId) ?? 0) + holdover.count,
@@ -138,13 +174,11 @@ export function simulateBaseline(
       values.push(partyCounts.get(id) ?? 0);
     for (const [id, values] of caucusSeats)
       values.push(caucusCounts.get(id) ?? 0);
-    if (snapshot.control && diagnostics.quality === "complete") {
+    if (control && diagnostics.quality === "complete") {
       const outcome = controlOutcome(
-        snapshot.control.outcomeKind === "seat_majority"
-          ? partyCounts
-          : caucusCounts,
-        snapshot.control.outcomeKind === "seat_majority" ? 0 : unknownSeats,
-        snapshot.control,
+        control.outcomeKind === "seat_majority" ? partyCounts : caucusCounts,
+        control.outcomeKind === "seat_majority" ? 0 : unknownSeats,
+        control,
       );
       controls.set(outcome, (controls.get(outcome) ?? 0) + 1);
     }
@@ -152,7 +186,7 @@ export function simulateBaseline(
   return {
     modelStatus: "experimental",
     parametersVersion: parameters.version,
-    seed: snapshot.seed,
+    seed,
     iterations,
     diagnostics,
     races: sortedRaces,
@@ -162,7 +196,7 @@ export function simulateBaseline(
     })),
     partySeats: [...partySeats].map(([id, values]) => summarize(id, values)),
     caucusSeats: [...caucusSeats].map(([id, values]) => summarize(id, values)),
-    questionOutcomeKind: snapshot.control?.outcomeKind ?? null,
+    questionOutcomeKind: control?.outcomeKind ?? null,
     questionOutcomeProbabilities: [...controls]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([outcomeId, count]) => ({

@@ -23,6 +23,8 @@ export const modelSnapshotSchema = z.strictObject({
   inputAsOf: utcInstantSchema,
   cutoffAt: utcInstantSchema,
   catalogVersion: id,
+  structuralReferenceId: z.uuid(),
+  qualityPolicyVersion: z.literal("poll-quality-v1"),
   modelVersion: id,
   parameterVersion: id,
   parameters: z.strictObject({
@@ -66,6 +68,11 @@ export const modelSnapshotSchema = z.strictObject({
       z.strictObject({
         signalId: id,
         revisionId: id,
+        pollLinkId: z.uuid(),
+        optionMappingId: z.uuid(),
+        externalQuestionId: id,
+        positiveOptionId: id,
+        negativeOptionId: id,
         raceId: id,
         pollsterId: id,
         sampleGroupId: id,
@@ -113,6 +120,16 @@ export const modelSnapshotSchema = z.strictObject({
     })
     .nullable(),
 }) satisfies z.ZodType<ModelSnapshot>;
+
+/** The reviewed structural payload uses exactly the snapshot's race and rule contracts. */
+export const structuralReferencePayloadSchema = modelSnapshotSchema.pick({
+  catalogVersion: true,
+  races: true,
+  control: true,
+});
+export type StructuralReferencePayload = z.infer<
+  typeof structuralReferencePayloadSchema
+>;
 
 export function parseModelSnapshot(raw: unknown): ModelSnapshot {
   const snapshot = modelSnapshotSchema.parse(raw);

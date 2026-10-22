@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   readObservatoryPollPage,
@@ -65,6 +65,10 @@ describe("bounded observatory poll reads", () => {
         secondAt,
       ),
       { scope: us2026, raceId: null },
+    );
+    // This fixture explicitly states when both original associations existed.
+    await database.db.execute(
+      sql`UPDATE poll_edition_links SET created_at = '2026-10-20T09:00:00Z' WHERE edition_id = ${us2026.editionId}`,
     );
     const firstSnapshot = await readObservatoryPollPage(database.db, {
       scope: us2026,

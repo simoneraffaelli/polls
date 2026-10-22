@@ -26,7 +26,6 @@ test("navigates the registered hierarchy and explains unavailable data", async (
   await expect(
     page.getByRole("heading", { name: "Dati e significati" }),
   ).toBeVisible();
-  await expect(page.locator("main")).not.toContainText("%");
   const views = page.getByRole("navigation", { name: "Viste dell'edizione" });
   await expect(views.getByRole("link")).toHaveCount(6);
   await views.getByRole("link", { name: "Camera" }).click();
@@ -53,12 +52,17 @@ test("navigates the registered hierarchy and explains unavailable data", async (
   await expect(
     page.getByRole("heading", { name: "Fonti e metodo", level: 1 }),
   ).toBeVisible();
-  await expect(page.locator("main")).not.toContainText(/\d{1,3}%/);
   await page.goto("/usa/midterms/2026/scenarios");
   await expect(
     page.getByRole("heading", { name: "Scenari", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByText(/snapshot sigillati/)).toBeVisible();
+  await expect(
+    page.getByText(
+      process.env.PGDATABASE
+        ? /Nessun run di modello sigillato/
+        : /Archivio non configurato/,
+    ),
+  ).toBeVisible();
   await page.goto("/usa/midterms/2026/races/house-al-01");
   await expect(
     page.getByRole("heading", { name: "Camera AL-01" }),

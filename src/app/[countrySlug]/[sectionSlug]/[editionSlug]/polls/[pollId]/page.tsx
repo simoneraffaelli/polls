@@ -6,10 +6,12 @@ import {
   canonicalUrl,
   editionNavigation,
   midtermsPollHistoryPath,
+  validPublicUuid,
 } from "@/composition/catalog";
 import {
   parsePublicAsOf,
   parsePublicOffset,
+  readPublicPollEditorialHistory,
   readPublicPollHistory,
 } from "@/composition/observatory";
 import { Breadcrumbs } from "@/ui/patterns/breadcrumbs";
@@ -44,7 +46,7 @@ function resolve({ countrySlug, sectionSlug, editionSlug, pollId }: Route) {
     !edition ||
     section.id !== scope.sectionId ||
     edition.id !== scope.editionId ||
-    !/^[a-f0-9-]{36}$/.test(pollId)
+    !validPublicUuid(pollId)
   )
     notFound();
   return { country, section, edition, pollId };
@@ -72,7 +74,10 @@ export default async function PollHistoryPage({ params, searchParams }: Props) {
     typeof query.offset === "string" ? query.offset : undefined,
   );
   if (!asOf || offset === null) notFound();
-  const history = await readPublicPollHistory(scope, pollId, asOf, offset);
+  const [history, decisions] = await Promise.all([
+    readPublicPollHistory(scope, pollId, asOf, offset),
+    readPublicPollEditorialHistory(scope, pollId, asOf),
+  ]);
   if (
     history.status === "ready" &&
     history.value.items.length === 0 &&
@@ -154,7 +159,54 @@ export default async function PollHistoryPage({ params, searchParams }: Props) {
           </Link>
         ) : null}
       </section>
+      <section
+        className="content-section"
+        aria-labelledby="editorial-history-title"
+      >
+        <h2 className="section-heading" id="editorial-history-title">
+          Decisioni di collegamento e uso futuro
+        </h2>
+        {decisions.status === "ready" ? (
+          decisions.value.items.length > 0 ? (
+            <ol className="revision-list">
+              {decisions.value.items.map((item) => (
+                <li key={item.id}>
+                  <p>
+                    {item.kind === "association"
+                      ? item.value
+                        ? "Collegamento incluso nella vista corrente"
+                        : "Collegamento escluso dalla vista corrente"
+                      : item.value
+                        ? "Sondaggio escluso dai nuovi calcoli previsionali"
+                        : "Sondaggio riammesso ai nuovi calcoli previsionali"}
+                  </p>
+                  <time dateTime={item.recordedAt}>
+                    {new Intl.DateTimeFormat("it-IT", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                      timeZone: "Europe/Rome",
+                    }).format(new Date(item.recordedAt))}
+                  </time>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>Nessuna decisione editoriale registrata entro questa data.</p>
+          )
+        ) : (
+          <DataNotice
+            state={{
+              status: decisions.status === "error" ? "error" : "empty",
+              message: decisions.message,
+            }}
+          />
+        )}
+        {decisions.status === "ready" && decisions.value.hasMore ? (
+          <p>
+            La cronologia mostrata è limitata alle cento decisioni più recenti.
+          </p>
+        ) : null}
+      </section>
     </>
   );
 }
-

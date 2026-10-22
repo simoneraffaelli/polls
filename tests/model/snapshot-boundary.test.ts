@@ -12,6 +12,8 @@ const snapshot = {
   inputAsOf: "2026-10-22T00:00:00Z",
   cutoffAt: "2026-11-03T00:00:00Z",
   catalogVersion: "v1",
+  structuralReferenceId: "22222222-2222-4222-8222-222222222222",
+  qualityPolicyVersion: "poll-quality-v1",
   modelVersion: "v1",
   parameterVersion: MIDTERMS_BASELINE_PARAMETERS.version,
   parameters: MIDTERMS_BASELINE_PARAMETERS,

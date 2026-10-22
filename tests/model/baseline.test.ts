@@ -6,7 +6,16 @@ import type {
   RaceModelInput,
 } from "@/elections/model/contracts";
 import { simulateBaseline } from "@/elections/model/simulate";
+import { parseModelResult } from "@/elections/model/result-schema";
+import {
+  parseModelSnapshot,
+  structuralReferencePayloadSchema,
+} from "@/elections/model/snapshot-schema";
 import { assessModelQuality } from "@/elections/model/quality";
+import {
+  publicScenarioBasis,
+  simulatePublicScenario,
+} from "@/elections/model/public-scenario";
 import {
   MIDTERMS_BASELINE_PARAMETERS,
   houseSeatMajorityRule,
@@ -31,6 +40,11 @@ const race = (id: string, margin = 0, regionId = "east"): RaceModelInput => ({
 const poll = (id: string, margin: number): PollModelInput => ({
   signalId: id,
   revisionId: `revision:${id}`,
+  pollLinkId: "11111111-1111-4111-8111-111111111111",
+  optionMappingId: "22222222-2222-4222-8222-222222222222",
+  externalQuestionId: "question:one",
+  positiveOptionId: "option:A",
+  negativeOptionId: "option:B",
   raceId: "race:one",
   pollsterId: "firm:one",
   sampleGroupId: "sample:shared",
@@ -56,6 +70,8 @@ const snapshot = (
   inputAsOf: asOf,
   cutoffAt: "2026-11-03T00:00:00Z",
   catalogVersion: "catalog-v1",
+  structuralReferenceId: "22222222-2222-4222-8222-222222222222",
+  qualityPolicyVersion: "poll-quality-v1",
   modelVersion: "midterms-baseline-v1",
   parameterVersion: MIDTERMS_BASELINE_PARAMETERS.version,
   parameters: MIDTERMS_BASELINE_PARAMETERS,
@@ -229,7 +245,7 @@ describe("Midterms experimental baseline", () => {
       100,
     );
     expect(result.questionOutcomeProbabilities).toEqual([
-      { outcomeId: "majority:A", probability: 1 },
+      { outcomeId: "control:A", probability: 1 },
     ]);
     expect(assessModelQuality(input, result).status).toBe(
       "experimental_candidate",
@@ -310,5 +326,92 @@ describe("Midterms experimental baseline", () => {
         parameters: { ...input.parameters, halfLifeDays: 1e-300 },
       }),
     ).toThrow(/bounds/);
+  });
+
+  it("accepts its own persisted result and rejects malformed JSONB probabilities or status", () => {
+    const result = simulateBaseline(snapshot([race("race:one")]), 100);
+    expect(parseModelResult(JSON.parse(JSON.stringify(result)))).toEqual(
+      result,
+    );
+    expect(() =>
+      parseModelResult({ ...result, modelStatus: "validated" }),
+    ).toThrow();
+    expect(() =>
+      parseModelResult({
+        ...result,
+        raceWinProbabilities: [
+          { raceId: "race:one", positiveProbability: 200 },
+        ],
+      }),
+    ).toThrow();
+    expect(() => parseModelResult({ ...result, unknown: true })).toThrow();
+    expect(() => parseModelResult({ ...result, races: [] })).toThrow();
+  });
+
+  it("requires exact poll link, question and distinct option references at the JSON boundary", () => {
+    const base = snapshot([race("race:one")], [poll("one", 2)]);
+    expect(parseModelSnapshot(JSON.parse(JSON.stringify(base)))).toEqual(base);
+    const missingLink = {
+      ...base,
+      polls: [{ ...base.polls[0], pollLinkId: undefined }],
+    };
+    expect(() => parseModelSnapshot(missingLink)).toThrow();
+    expect(() =>
+      parseModelSnapshot({
+        ...base,
+        polls: [{ ...base.polls[0], optionMappingId: "unreviewed" }],
+      }),
+    ).toThrow();
+    const forgedOptions = {
+      ...base,
+      polls: [
+        { ...base.polls[0], negativeOptionId: base.polls[0].positiveOptionId },
+      ],
+    };
+    expect(() => parseModelSnapshot(forgedOptions)).toThrow(/identity/);
+    const truthyString = {
+      ...base,
+      races: [{ ...base.races[0], binaryResolutionVerified: "yes" }],
+    };
+    expect(() => parseModelSnapshot(truthyString)).toThrow();
+    expect(() =>
+      parseModelSnapshot({ ...base, structuralReferenceId: "forged" }),
+    ).toThrow();
+    expect(() =>
+      parseModelSnapshot({ ...base, qualityPolicyVersion: "unknown" }),
+    ).toThrow();
+    const reviewed = {
+      catalogVersion: base.catalogVersion,
+      races: base.races,
+      control: base.control,
+    };
+    expect(structuralReferencePayloadSchema.parse(reviewed)).toEqual(reviewed);
+    expect(() =>
+      structuralReferencePayloadSchema.parse({
+        ...reviewed,
+        races: [{ ...base.races[0], binaryResolutionVerified: "yes" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      structuralReferencePayloadSchema.parse({ ...reviewed, extra: "hidden" }),
+    ).toThrow();
+  });
+
+  it("reuses the exact simulation kernel from a public aggregate basis without poll records", () => {
+    const input = snapshot([race("race:one")], [poll("one", 3)]);
+    const result = simulateBaseline(input, 200);
+    const basis = publicScenarioBasis({
+      publicationId: "publication:one",
+      runId: "run:one",
+      readState: "frozen",
+      snapshot: input,
+      result,
+    });
+    expect(simulatePublicScenario(basis, 0, 200)).toEqual(result);
+    expect(JSON.stringify(basis)).not.toMatch(
+      /pollLinkId|revisionId|sampleGroupId|priorMarginPoints|optionMappingId/,
+    );
+    expect(() => simulatePublicScenario(basis, 6, 200)).toThrow(/bounds/);
+    expect(() => simulatePublicScenario(basis, 0, 2001)).toThrow(/bounds/);
   });
 });

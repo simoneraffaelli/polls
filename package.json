@@ -23,6 +23,8 @@
     "db:migrate": "tsx scripts/migrate-db.ts",
     "queue:install": "tsx src/worker/install-queue.ts",
     "admin:provision": "node dist-worker/worker/provision-admin.js",
+    "model:register-structure": "node dist-worker/worker/structural-register.js",
+    "model:run": "node dist-worker/worker/model-run.js",
     "format": "prettier --write src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts",
     "format:check": "prettier --check src tests scripts package.json tsconfig.json tsconfig.worker.json next.config.ts postcss.config.mjs eslint.config.mjs vitest.config.mts vitest.database.config.mts drizzle.config.ts playwright.config.ts"
   },
