@@ -28,6 +28,8 @@ La copertura di VoteHub per singole gare e archivi storici non è ancora dimostr
 
 Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senato, sondaggi, notizie e metodo, in italiano. Le pagine leggono l'archivio PostgreSQL con provenienza, filtri, paginazione e stati espliciti di assenza o errore. Il catalogo strutturale comprende 470 gare; l'amministrazione consente gestione delle fonti e import controllato. **Nessuna fonte è stata attivata in produzione, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
 
+La [CI del codice completato](https://github.com/simoneraffaelli/polls/actions/runs/39786217506) supera 94 test ordinari, 29 test PostgreSQL, 6 test browser, build e controlli dei container. Il collaudo sul VPS e la validazione statistica rimangono separati da queste verifiche automatiche.
+
 - [Piano di implementazione](docs/IMPLEMENTATION_PLAN.md): architettura, fasi, criteri di completamento, fonti, verifiche, costi e distribuzione.
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
 - [Avanzamento e verifiche](docs/IMPLEMENTATION_STATUS.md): consegne, controlli eseguiti e dipendenze ancora aperte.

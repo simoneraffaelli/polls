@@ -10,7 +10,7 @@
 
 **Data:** 22 ottobre 2026
 
-**Stato:** implementazione avviata per incrementi verificabili; avanzamento e limiti in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Nessuna distribuzione eseguita.
+**Stato:** codice implementato nel perimetro delle fonti ammesse e controlli automatici superati; evidenze e limiti in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Restano aperti dati necessari, validazione statistica, collaudo operativo e rilascio. Nessuna distribuzione eseguita.
 
 **Modalità concordata con l'utente:** proseguire autonomamente nelle fasi implementabili, con sottoagenti, revisione dell'orchestratore, test e commit/push intermedi. Non è richiesta una revisione umana a ogni fase. Il collaudo operativo delle fasi 9–10 e il rilascio saranno eseguiti in occasione del deployment dell'utente, prima dell'apertura pubblica; i test automatici di sviluppo e la preparazione delle procedure si svolgono adesso. La disponibilità del codice non sostituisce né queste evidenze né la validazione statistica.
 

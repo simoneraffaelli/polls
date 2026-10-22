@@ -2,6 +2,8 @@
 
 Aggiornato: 22 ottobre 2026. Specifica: [piano di implementazione](IMPLEMENTATION_PLAN.md).
 
+**Consegna applicativa implementata nel perimetro delle fonti ammesse.** La [CI finale del codice `0f8f307`](https://github.com/simoneraffaelli/polls/actions/runs/39786217506) è passata integralmente: typecheck, lint, formattazione, 94 test ordinari, 29 test PostgreSQL 17, build web/worker, 6 test browser e controlli dei container. Restano aperti i requisiti sui dati e sulla validazione statistica, oltre al collaudo operativo e al rilascio rinviati dall'utente. Non viene dichiarata completa la prima versione validata del prodotto.
+
 ## Metodo e autorizzazioni
 
 L'orchestratore assegna attività circoscritte ai sottoagenti Sol Medium/High richiesti dall'utente, revisiona il risultato e fa correggere i difetti prima della consegna. Gli agenti già informati vengono riutilizzati; i controlli aggiuntivi si concentrano sulle modifiche e sui rischi emersi. La preferenza Astra High per l'orchestratore è una scelta delle impostazioni della chat: questo documento non certifica il modello effettivamente in esecuzione.
@@ -14,13 +16,13 @@ L'utente ha autorizzato commit e push sul branch `codex/implementation-foundatio
 |---|---|---|
 | 0 — Specifica, fonti e ambiente | Audit del riferimento, condizioni delle fonti, perimetro e limiti documentati | Copertura dei dati e risorse effettive del VPS ancora da confermare |
 | 1 — Fondazioni | Web e worker, runtime fissato, CI, immagini e Compose | Avvio container e permessi runtime verificati in CI; Coolify da configurare |
-| 2 — Persistenza | Migrazioni, revisioni, sigilli, scope, input e pubblicazioni atomiche | Test PostgreSQL reale in CI; nuova serie di regressioni in verifica |
+| 2 — Persistenza | Migrazioni, revisioni, sigilli, scope, input e pubblicazioni atomiche | Test PostgreSQL reale e regressioni superati nella CI finale |
 | 3 — Raccolta | HTTP limitato, quarantena, cursori, retry/riavvio, import e scheduler | Fonti disabilitate per impostazione predefinita; nessuna raccolta di produzione |
 | 4 — Fonti e catalogo | VoteHub generic ballot, RSS Fed, import manuale, parser MEDSL Senate V8, 470 gare | Polymarket tecnico e inattivo; candidati, geometrie e prior completi non verificati |
 | 5 — Sistema grafico | Hub, paese, sezione, edizione, componenti, grafici e tabelle alternative | Navigazione e mobile verificati; viste con dati sintetici riservate ai test |
-| 6 — Osservatorio e admin | Letture reali, filtri e storico, provenienza, Better Auth, import con anteprima, audit ed esclusioni | Nuovi test HTTP amministrativi in verifica CI |
+| 6 — Osservatorio e admin | Letture reali, filtri e storico, provenienza, Better Auth, import con anteprima, audit ed esclusioni | Login, import, conflitti, richieste malformate e revoca verificati via HTTP nella CI finale |
 | 7 — Modello | Baseline correlata, input verificati, assemblatore DB, coda, pubblicazione, risultati e storico | Modello sperimentale; nessuna previsione 2026 pubblicata; validazione statistica aperta |
-| 8 — Scenari e serie | Web Worker limitato e cancellabile, serie di sondaggi comparabili, copertura notizie e variazioni delle fonti | Nuovo flusso browser con run sintetico in verifica CI; tono e IA esterna disabilitati |
+| 8 — Scenari e serie | Web Worker limitato e cancellabile, serie di sondaggi comparabili, copertura notizie e variazioni delle fonti | Flusso browser con run sintetico e vista mobile verificati in CI; tono e IA esterna disabilitati |
 | 9 — Verifiche | Test dominio/provider/DB/browser, migrazione precedente, fixture secondo paese, controlli container e sonda di carico limitata | Misure rappresentative web+worker sul VPS, backup esterno e ripristino rinviati al collaudo operativo |
 | 10 — Rilascio | Compose, ruoli DB separati, health check, limiti/rotazione log, script backup/restore e runbook | Nessun deployment, modifica DNS, backup remoto o prova di ripristino effettivo |
 
@@ -38,6 +40,10 @@ Il codice predisposto e una procedura descritta non dimostrano l'esito di un col
 - Revisione visiva delle pagine senza dati a 1280 e 390 pixel: assenza di overflow orizzontale, skip link funzionante e nessun errore JavaScript rilevato. Grafici con alternative tabellari; nessun risultato numerico dimostrativo nelle pagine ordinarie.
 
 Le suite PostgreSQL creano schemi casuali in un database di test dedicato e non usano credenziali di produzione. I test browser con amministrazione e scenario richiedono provisioning e dati sintetici nel database di CI; in locale senza PostgreSQL tali casi sono esplicitamente saltati. Le fixture sintetiche non fanno parte del seed di prodotto.
+
+La CI finale ha confermato tutte le correzioni delle fixture precedenti. Il test di accesso attende ora la navigazione autenticata, anziché un titolo presente anche sulla pagina di login. Le prove comprendono un run sintetico pubblicato realmente attraverso il bridge, probabilità e cronologia visibili, swing e reset nel Web Worker, invariabilità della previsione base, pagina mobile senza overflow, import amministrativo e revoca immediata del ruolo. Il test della coda verifica anche lettura dello stato senza esporre lo snapshot.
+
+Il controllo container del commit `502436a` ha misurato 40 letture, concorrenza 4, zero errori e p95 agli header di 72 ms su runner GitHub con solo seed strutturale e fonti disabilitate. La CI finale ha ripetuto con successo questo controllo limitato. Il dato non rappresenta carico simultaneo di raccolta/calcolo, dataset reali o risorse del VPS e non chiude il collaudo operativo.
 
 ## Risultati della revisione
 
