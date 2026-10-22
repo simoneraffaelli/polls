@@ -25,6 +25,14 @@ export type SectionDefinition = Readonly<{
 }>;
 
 export type Breadcrumb = Readonly<{ label: string; href: string }>;
+export type EditionViewDefinition = Readonly<{
+  id: string;
+  editionId: string;
+  slug: string;
+  name: string;
+  description: string;
+  kind: "competition" | "polls" | "news" | "methodology";
+}>;
 export const homePath = "/";
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -57,17 +65,21 @@ function unique(value: string, seen: Set<string>, kind: string): void {
 export function createCatalog(
   countries: readonly CountryDefinition[],
   sections: readonly SectionDefinition[],
+  views: readonly EditionViewDefinition[] = [],
 ) {
   const countryIds = new Set<string>();
   const countrySlugs = new Set<string>();
   const countryCodes = new Set<string>();
   const sectionIds = new Set<string>();
   const editionIds = new Set<string>();
+  const viewIds = new Set<string>();
   const countriesById = new Map<string, CountryDefinition>();
   const countriesBySlug = new Map<string, CountryDefinition>();
   const sectionsById = new Map<string, SectionDefinition>();
   const sectionsByCountry = new Map<string, SectionDefinition[]>();
   const sectionsByRoute = new Map<string, SectionDefinition>();
+  const editionsById = new Map<string, EditionDefinition>();
+  const viewsByEdition = new Map<string, EditionViewDefinition[]>();
 
   for (const input of countries) {
     if (
@@ -111,7 +123,10 @@ export function createCatalog(
       checkSlug(edition.slug, "edition");
       unique(edition.id, editionIds, "edition id");
       unique(edition.slug, editionSlugs, "edition slug");
-      return Object.freeze({ ...edition });
+      const registeredEdition = Object.freeze({ ...edition });
+      editionsById.set(edition.id, registeredEdition);
+      viewsByEdition.set(edition.id, []);
+      return registeredEdition;
     });
     if (
       !frozenEditions.some((edition) => edition.id === input.currentEditionId)
@@ -128,6 +143,39 @@ export function createCatalog(
     sectionsByRoute.set(routeKey, section);
     sectionsByCountry.get(country.id)!.push(section);
   }
+
+  for (const input of views) {
+    if (!editionsById.has(input.editionId)) {
+      throw new Error(`Unknown edition view reference: ${input.editionId}`);
+    }
+    if (
+      !input.id ||
+      !input.name ||
+      !input.description ||
+      !["competition", "polls", "news", "methodology"].includes(input.kind)
+    ) {
+      throw new Error(`Invalid edition view definition: ${input.id}`);
+    }
+    if (
+      !slugPattern.test(input.slug) ||
+      ["admin", "api", "_next"].includes(input.slug)
+    ) {
+      throw new Error(`Invalid edition view slug: ${input.slug}`);
+    }
+    unique(input.id, viewIds, "edition view id");
+    const editionViews = viewsByEdition.get(input.editionId)!;
+    if (editionViews.some((view) => view.slug === input.slug)) {
+      throw new Error(`Duplicate edition view slug: ${input.slug}`);
+    }
+    editionViews.push(Object.freeze({ ...input }));
+  }
+
+  const registeredViewsByEdition = new Map(
+    [...viewsByEdition].map(([id, entries]) => [
+      id,
+      Object.freeze([...entries]),
+    ]),
+  );
 
   const registeredCountries = Object.freeze([...countriesById.values()]);
   const registeredSectionsByCountry = new Map(
@@ -195,15 +243,50 @@ export function createCatalog(
     }
     return `${sectionPath(registered)}/${registeredEdition.slug}`;
   };
+  const viewsForEdition = (
+    section: SectionDefinition,
+    edition: EditionDefinition,
+  ) => {
+    editionPath(section, edition);
+    return registeredViewsByEdition.get(edition.id) ?? [];
+  };
+  const viewBySlugs = (
+    countrySlug: string,
+    sectionSlug: string,
+    editionSlug: string,
+    viewSlug: string,
+  ) => {
+    const edition = editionBySlugs(countrySlug, sectionSlug, editionSlug);
+    return edition
+      ? registeredViewsByEdition
+          .get(edition.id)
+          ?.find((view) => view.slug === viewSlug)
+      : undefined;
+  };
+  const viewPath = (
+    section: SectionDefinition,
+    edition: EditionDefinition,
+    view: EditionViewDefinition,
+  ) => {
+    const base = editionPath(section, edition);
+    const registered = registeredViewsByEdition
+      .get(edition.id)
+      ?.find((entry) => entry.id === view.id && entry.slug === view.slug);
+    if (!registered) throw new Error(`Unregistered edition view: ${view.id}`);
+    return `${base}/${registered.slug}`;
+  };
   const breadcrumbs = (
     country?: CountryDefinition,
     section?: SectionDefinition,
     edition?: EditionDefinition,
+    view?: EditionViewDefinition,
   ): readonly Breadcrumb[] => {
     if (section && !country)
       throw new Error("Section breadcrumb requires a country");
     if (edition && !section)
       throw new Error("Edition breadcrumb requires a section");
+    if (view && !edition)
+      throw new Error("Edition view breadcrumb requires an edition");
     const registered = country && registeredCountry(country);
     const registeredSectionValue = section && registeredSection(section);
     if (
@@ -229,6 +312,17 @@ export function createCatalog(
         (entry) => entry.id === edition.id,
       )!;
       items.push({ label: registeredEdition.name, href });
+      if (view) {
+        const viewHref = viewPath(
+          registeredSectionValue,
+          registeredEdition,
+          view,
+        );
+        const registeredView = registeredViewsByEdition
+          .get(registeredEdition.id)!
+          .find((entry) => entry.id === view.id)!;
+        items.push({ label: registeredView.name, href: viewHref });
+      }
     }
     return Object.freeze(items);
   };
@@ -243,6 +337,9 @@ export function createCatalog(
     countryPath,
     sectionPath,
     editionPath,
+    viewsForEdition,
+    viewBySlugs,
+    viewPath,
     breadcrumbs,
   });
 }

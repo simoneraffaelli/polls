@@ -20,8 +20,8 @@ Chiarimento dell'utente del 22 ottobre: l'orchestratore deve continuare fino al 
 | Fondazioni locali | 1 | Typecheck, lint, test mirati, build e avvio documentato; controlli container separati | Incremento locale verificato; collaudo container ancora da eseguire |
 | Persistenza e contratti | 2 | Migrazioni, revisioni e isolamento su PostgreSQL reale | Verificato in CI PostgreSQL 17 sul commit `284f095` |
 | Raccolta e fonti ammesse | 3–4 | Fixture, retry, cursori, idempotenza e pubblicazioni ordinate | Fase 3 in corso; adapter e fonti ancora da collegare |
-| Interfaccia e osservatorio | 5–6 | Accessibilità, provenienza, stati reali e autorizzazioni amministrative | Non iniziato |
-| Modello e scenari | 7–8 | Riproducibilità, valutazione temporale e limiti di calcolo | Non iniziato |
+| Interfaccia e osservatorio | 5–6 | Accessibilità, provenienza, stati reali e autorizzazioni amministrative | Componenti e navigazione verificati; letture reali e amministrazione in corso |
+| Modello e scenari | 7–8 | Riproducibilità, valutazione temporale e limiti di calcolo | Motore puro e criteri di valutazione in corso; nessun modello pubblicato |
 | Collaudo e rilascio | 9–10 | Carico, ripristino, sicurezza e verifiche dell'ambiente finale | Non iniziato |
 
 I blocchi non costituiscono nuove autorizzazioni al rilascio. La fase 5 può procedere dopo le fondazioni secondo le dipendenze del piano. Lo stato di un blocco cambia soltanto sulla base di evidenze; una configurazione scritta non equivale a una verifica eseguita.
@@ -48,6 +48,12 @@ Typecheck, lint, formattazione, controllo della struttura delle migrazioni e **2
 La fase 3 può proseguire. I test PostgreSQL usano schemi temporanei isolati in CI; non certificano ancora backup, reti o risorse del VPS.
 
 ## Fase 0: perimetro iniziale
+
+### Adapter e interfaccia: incremento locale
+
+Sono presenti adapter conservativi VoteHub generic ballot e Fed Monetary Policy, adapter CLOB inattivo con verifiche esplicite richieste e parser MEDSL Senate V8 con provenienza temporale. Il catalogo strutturale contiene 435 gare Camera e 35 Senato; candidati, geometrie e assegnazioni individuali dei seggi non in voto non sono dichiarati verificati. La particolarità del calendario Camera in Louisiana è esplicita. Il CSV storico completo è stato controllato localmente, senza importarlo nel database.
+
+Le viste dell'edizione e i componenti comuni distinguono intenzioni di voto, probabilità, mercati e notizie. I grafici hanno tabelle alternative, le attribuzioni rifiutano URL non sicuri e gli estratti senza permesso non vengono mostrati. Revisione visiva desktop/mobile eseguita su homepage, edizione, sondaggi e metodo; nessun overflow di pagina o errore JavaScript rilevato. Typecheck, lint, build e **3 test browser** superati dall'agente; l'orchestratore ha rieseguito **47 test mirati** di provider, dominio, catalogo e presentazione. Il collegamento ai dati reali e l'amministrazione sono la consegna successiva, ancora in corso.
 
 - Primo incremento: fondazioni locali dell'osservatorio, catalogo paese/sezione/edizione e navigazione `/` → `/usa` → `/usa/midterms` → `/usa/midterms/2026`.
 - Nessuna fonte attiva, osservazione reale, previsione o scenario viene dichiarato disponibile prima della relativa verifica. Le prime pagine mostrano l'assenza di dati e lo stato di sviluppo.

@@ -196,4 +196,50 @@ describe("catalog registration and routing", () => {
     expect(catalog.sectionsForCountry(country)).toEqual([registeredSection]);
     expect(registeredSection.editions).toHaveLength(1);
   });
+
+  it("registers edition views only beneath their own edition", () => {
+    const us = section("country:us", "section:us:elections");
+    const it = section("country:it", "section:it:elections");
+    const view = {
+      id: "view:us:house",
+      editionId: us.editions[0].id,
+      slug: "house",
+      name: "Camera",
+      description: "Gare per la Camera",
+      kind: "competition" as const,
+    };
+    const italianView = {
+      ...view,
+      id: "view:it:house",
+      editionId: it.editions[0].id,
+      kind: "news" as const,
+    };
+    const catalog = createCatalog(countries, [us, it], [view, italianView]);
+    const registeredUs = catalog.sectionBySlugs("usa", "elections")!;
+    const registeredIt = catalog.sectionBySlugs("italy", "elections")!;
+
+    expect(catalog.viewPath(registeredUs, registeredUs.editions[0], view)).toBe(
+      "/usa/elections/2026/house",
+    );
+    expect(
+      catalog.viewBySlugs("italy", "elections", "2026", "house")?.kind,
+    ).toBe("news");
+    expect(
+      catalog
+        .breadcrumbs(countries[0], registeredUs, registeredUs.editions[0], view)
+        .map(({ href }) => href),
+    ).toEqual([
+      "/",
+      "/usa",
+      "/usa/elections",
+      "/usa/elections/2026",
+      "/usa/elections/2026/house",
+    ]);
+    expect(() =>
+      catalog.viewPath(registeredIt, registeredIt.editions[0], view),
+    ).toThrow(/Unregistered edition view/);
+    expect(() =>
+      createCatalog(countries, [us, it], [{ ...view, editionId: "missing" }]),
+    ).toThrow(/Unknown edition view reference/);
+  });
 });

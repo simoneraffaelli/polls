@@ -33,7 +33,7 @@ export default function RootLayout({
             <span className="header-note">Osservatorio in preparazione</span>
           </div>
         </header>
-        <main className="shell" id="main-content">
+        <main className="shell" id="main-content" tabIndex={-1}>
           {children}
         </main>
         <footer className="site-footer">

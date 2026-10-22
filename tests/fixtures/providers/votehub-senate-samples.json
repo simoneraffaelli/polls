@@ -1,0 +1,64 @@
+[
+  {
+    "id": "us-202bow14c3613e",
+    "poll_type": "us-senator",
+    "sample_size": 1000,
+    "population": "lv",
+    "url": "https://scholarworks.bgsu.edu/cgi/viewcontent.cgi?article=1030&context=depo",
+    "created_at": "2026-10-16",
+    "start_date": "2026-09-29",
+    "end_date": "2026-10-09",
+    "pollster": "Bowling Green State University/YouGov",
+    "answers": [
+      {
+        "choice": "Sherrod Brown",
+        "pct": 48.0
+      },
+      {
+        "choice": "Jon Husted",
+        "pct": 42.0
+      },
+      {
+        "choice": "Bill Redpath",
+        "pct": 3.0
+      },
+      {
+        "choice": "Greg Levy",
+        "pct": 5.0
+      }
+    ],
+    "seat_name": null,
+    "sponsors": [],
+    "internal": false,
+    "partisan": null,
+    "subject": "2026 Ohio"
+  },
+  {
+    "id": "us-202thed1db38e3",
+    "poll_type": "us-senator",
+    "sample_size": 600,
+    "population": "lv",
+    "url": "https://www.breitbart.com/politics/2026/10/15/exclusive-poll-shows-mike-rogers-edging-out-abdul-el-sayed-in-michigan-senate-race/",
+    "created_at": "2026-10-16",
+    "start_date": "2026-10-06",
+    "end_date": "2026-10-08",
+    "pollster": "The Tyson Group",
+    "answers": [
+      {
+        "choice": "Abdul El-Sayed",
+        "pct": 44.0
+      },
+      {
+        "choice": "Mike Rogers",
+        "pct": 46.0
+      }
+    ],
+    "seat_name": null,
+    "sponsors": [
+      "Alliance for a Better Future"
+    ],
+    "internal": false,
+    "partisan": "REP",
+    "subject": "2026 Michigan"
+  }
+]

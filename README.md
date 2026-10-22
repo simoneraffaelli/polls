@@ -26,7 +26,7 @@ La copertura di VoteHub per singole gare e archivi storici non è ancora dimostr
 
 ## Stato e documentazione
 
-L'implementazione delle fondazioni locali è iniziata: catalogo tipizzato, navigazione dell'hub e pagine in italiano con stati di assenza dati. **Nessuna fonte è attiva, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
+Sono implementati catalogo tipizzato, navigazione dell'hub e viste Camera, Senato, sondaggi, notizie e metodo, in italiano e con stati espliciti di assenza dati. Gli adapter verificati e il catalogo strutturale delle 470 gare sono pronti per il collegamento alla persistenza. **Nessuna fonte è attiva, nessuna previsione è disponibile e nessun deployment è stato eseguito.** Le pagine preparatorie sono `noindex`; rotte future e sconosciute restituiscono 404.
 
 - [Piano di implementazione](docs/IMPLEMENTATION_PLAN.md): architettura, fasi, criteri di completamento, fonti, verifiche, costi e distribuzione.
 - [Istruzioni per gli agenti](AGENTS.md): regole di sviluppo e vincoli del progetto.
@@ -34,6 +34,7 @@ L'implementazione delle fondazioni locali è iniziata: catalogo tipizzato, navig
 - [Architettura iniziale](docs/ARCHITECTURE.md): responsabilità e confini del primo incremento.
 - [Dizionario dei dati](docs/DATA_DICTIONARY.md): identità, provenienza, unità, revisioni e contratti di pubblicazione.
 - [Raccolta e import](docs/COLLECTION.md): ricevute, cursori, quarantena e limiti delle acquisizioni.
+- [Sistema grafico](docs/DESIGN_SYSTEM.md): token, componenti, accessibilità e significato delle misure.
 - [Fonti](docs/SOURCES.md): evidenze, condizioni e criteri di ammissione.
 - [Audit del riferimento](docs/REFERENCE_AUDIT.md): inventario del materiale esterno, consultato senza eseguirlo.
 - [Regole Midterms 2026](docs/MIDTERMS_RULES.md): seggi, calendario, caucus e limiti da mantenere espliciti nel catalogo e nel modello.
